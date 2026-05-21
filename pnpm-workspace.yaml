@@ -1,5 +1,10 @@
 # pnpm 11 requires explicit approval for packages with install/build scripts.
-# Both packages below are legitimate native deps shipped by Next.js / its toolchain.
+# Each entry here is a transitive dep shipped by tools we use that needs to
+# run a postinstall (usually to fetch a native binary).
+#   - esbuild       - used by vercel CLI's bundler; fetches a Go binary
+#   - sharp         - image optimization used by next/image; fetches libvips
+#   - unrs-resolver - Rust-based module resolver used by eslint-config-next
 allowBuilds:
-  sharp: true          # Image optimization library used by next/image
-  unrs-resolver: true  # Rust-based module resolver used by eslint-config-next
+  esbuild: true
+  sharp: true
+  unrs-resolver: true
