@@ -1,0 +1,5 @@
+# pnpm 11 requires explicit approval for packages with install/build scripts.
+# Both packages below are legitimate native deps shipped by Next.js / its toolchain.
+allowBuilds:
+  sharp: true          # Image optimization library used by next/image
+  unrs-resolver: true  # Rust-based module resolver used by eslint-config-next
