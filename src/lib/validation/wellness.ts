@@ -203,3 +203,102 @@ export const moodSchema = z.object({
 });
 
 export type MoodInput = z.infer<typeof moodSchema>;
+
+
+// ============================================================================
+// BODY COMPOSITION
+// ============================================================================
+
+export const bodyCompositionSchema = z.object({
+  measured_at: z.coerce.date(),
+  // Every measurement nullable so a quick "weight only" check-in is a valid
+  // row.
+  weight_lbs: optionalNumber,
+  body_fat_pct: optionalNumber.refine(
+    (v) => v === undefined || (v >= 0 && v <= 100),
+    "Body fat % must be 0-100",
+  ),
+  skeletal_muscle_lbs: optionalNumber,
+  waist_in: optionalNumber,
+  chest_in: optionalNumber,
+  arm_in: optionalNumber,
+  thigh_in: optionalNumber,
+  notes: optionalText,
+});
+
+export type BodyCompositionInput = z.infer<typeof bodyCompositionSchema>;
+
+
+// ============================================================================
+// CYCLE
+// ============================================================================
+
+export const cyclePhases = ["menstrual", "follicular", "ovulation", "luteal"] as const;
+export const cycleFlows = ["none", "light", "medium", "heavy"] as const;
+
+// occurred_at is a calendar date (not a timestamptz). The form uses
+// <input type="date"> which posts "YYYY-MM-DD".
+export const cycleEntrySchema = z.object({
+  occurred_at: z.coerce.date(),
+  phase: z
+    .preprocess(
+      (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+      z.enum(cyclePhases),
+    )
+    .optional(),
+  flow: z
+    .preprocess(
+      (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+      z.enum(cycleFlows),
+    )
+    .optional(),
+  // Symptoms come from a TagInput like mood.tags.
+  symptoms: z.preprocess(
+    (v) => {
+      if (typeof v !== "string") return undefined;
+      const arr = v
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean);
+      return arr.length ? arr : undefined;
+    },
+    z.array(z.string()).optional(),
+  ),
+  notes: optionalText,
+});
+
+export type CycleEntryInput = z.infer<typeof cycleEntrySchema>;
+
+
+// ============================================================================
+// MEDICATIONS - registry (no event) + logs (event per dose)
+// ============================================================================
+
+export const medicationSchema = z.object({
+  name: z.string().trim().min(1, "Name is required"),
+  dosage: optionalText,
+  frequency: optionalText,
+  started_on: optionalDate,
+  ended_on: optionalDate,
+  prescribing_doctor: optionalText,
+  purpose: optionalText,
+  notes: optionalText,
+}).refine(
+  (v) => !v.ended_on || !v.started_on || v.ended_on >= v.started_on,
+  { message: "End date must be after start date", path: ["ended_on"] },
+);
+
+export type MedicationInput = z.infer<typeof medicationSchema>;
+
+export const medicationLogSchema = z.object({
+  medication_id: z.string().uuid("Pick a medication"),
+  taken_at: z.coerce.date(),
+  dose_taken: optionalText,
+  skipped: z.preprocess(
+    (v) => v === "on" || v === true || v === "true",
+    z.boolean(),
+  ),
+  notes: optionalText,
+});
+
+export type MedicationLogInput = z.infer<typeof medicationLogSchema>;

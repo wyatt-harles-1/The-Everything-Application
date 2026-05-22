@@ -19,11 +19,11 @@ const cards: { href: string; label: string; eta?: string }[] = [
   { href: "/log/mood/new", label: "Mood" },
   { href: "/log/sleep/new", label: "Sleep" },
   { href: "/log/workout/new", label: "Workout" },
-  // Wave 2 placeholders so the grid shape stays stable. Disabled until those
-  // forms exist.
-  { href: "#", label: "Body comp", eta: "Wave 2" },
-  { href: "#", label: "Cycle", eta: "Wave 2" },
-  { href: "#", label: "Medication", eta: "Wave 2" },
+  { href: "/log/body/new", label: "Body comp" },
+  { href: "/log/cycle/new", label: "Cycle" },
+  // Medication links at the hub (not /new) because dose-logging happens there.
+  { href: "/log/medication", label: "Medication" },
+  // Wave 3 placeholder so the grid shape stays stable.
   { href: "#", label: "Bloodwork", eta: "Wave 3" },
 ];
 
@@ -39,6 +39,14 @@ function detailPathFor(eventType: string, detailId: string): string | null {
       return `/log/sleep/${detailId}`;
     case "mood_check":
       return `/log/mood/${detailId}`;
+    case "body_measurement":
+      return `/log/body/${detailId}`;
+    case "cycle_entry":
+      return `/log/cycle/${detailId}`;
+    // medication_taken events don't have their own detail page in Phase 2 -
+    // doses are edited on the medication hub. Just link there.
+    case "medication_taken":
+      return `/log/medication`;
     default:
       return null;
   }
