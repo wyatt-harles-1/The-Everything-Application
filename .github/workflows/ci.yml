@@ -1,0 +1,52 @@
+# CI for Life Hub.
+#
+# Runs on every push to main and every PR. The job sequence mirrors what we
+# verify locally: install with the lockfile pinned, then typecheck, lint, and
+# production build. If anything red-lights, the PR can't merge once branch
+# protection requires this check.
+#
+# Notes on choices:
+#   - Node 24 matches Vercel's runtime (see Vercel project settings).
+#   - pnpm version is pinned via the `packageManager` field in package.json
+#     so CI never drifts from local. setup-pnpm reads that field
+#     automatically — no explicit version flag here.
+#   - We skip env vars entirely. `pnpm build` doesn't call Supabase at build
+#     time (every server route is dynamic — none get prerendered), so
+#     missing NEXT_PUBLIC_SUPABASE_URL etc. doesn't fail the build.
+
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    name: typecheck / lint / build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type check
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Build
+        run: pnpm build
