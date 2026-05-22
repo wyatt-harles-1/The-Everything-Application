@@ -1,50 +1,90 @@
-// Server Action for the magic-link login form. Lives in a separate file so
-// the form `action={...}` prop can reference it directly — Next.js requires
-// Server Actions to be either inline in a Server Component or imported from
-// a "use server" module.
+// Server Actions for the OTP-code login flow.
+//
+// Two-step: request the code (email goes out via Resend), then verify the
+// 6-digit code the user types in. PKCE / magic-link is the prior approach -
+// we abandoned it because the code_verifier cookie only exists on the
+// browser that submitted the request, breaking cross-device sign-in (submit
+// on laptop, open mail on phone).
+//
+// The OTP code path is stateless from the client's perspective: verifyOtp
+// sets session cookies directly on success, no callback hop needed.
 
 "use server";
 
-import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { createClient } from "@/lib/supabase/server";
 
 const emailSchema = z.string().trim().toLowerCase().email();
+const tokenSchema = z.string().trim().regex(/^\d{6}$/, "Enter the 6-digit code");
 
-export async function requestMagicLink(formData: FormData) {
-  // Validate before hitting Supabase so a malformed email doesn't burn a slot
-  // against the per-hour magic-link rate limit (config.toml: email_sent = 2).
-  const parsed = emailSchema.safeParse(formData.get("email"));
+export type LoginState =
+  | { ok: false; banner?: string; errors?: { email?: string; token?: string } }
+  | { ok: true; sent: true; email: string }
+  | null;
+
+// ----- Step 1: request the code ----------------------------------------------
+
+export async function requestOtp(
+  _prev: LoginState,
+  fd: FormData,
+): Promise<LoginState> {
+  const parsed = emailSchema.safeParse(fd.get("email"));
   if (!parsed.success) {
-    redirect(`/login?error=${encodeURIComponent("Enter a valid email address.")}`);
+    return { ok: false, errors: { email: "Enter a valid email address." } };
   }
   const email = parsed.data;
 
   const supabase = await createClient();
 
-  // The `origin` header tells us where the request came from (e.g.
-  // http://localhost:3000). Computing the callback URL from it means the same
-  // code works locally and after we deploy to Vercel without an env var.
-  const origin = (await headers()).get("origin");
-  if (!origin) {
-    redirect(`/login?error=${encodeURIComponent("Could not determine request origin.")}`);
-  }
-
+  // shouldCreateUser=false means an unknown email gets rejected up front
+  // rather than silently creating an account. Sign-ups are still admin-only.
   const { error } = await supabase.auth.signInWithOtp({
     email,
-    options: {
-      // shouldCreateUser=false: only allow existing users to sign in. New
-      // users are created in Supabase Studio for now (per README). Flip to
-      // true when we want self-service signup.
-      shouldCreateUser: false,
-      emailRedirectTo: `${origin}/auth/callback`,
-    },
+    options: { shouldCreateUser: false },
   });
 
   if (error) {
-    redirect(`/login?error=${encodeURIComponent(error.message)}`);
+    return { ok: false, banner: error.message };
   }
-  redirect("/login?sent=1");
+  return { ok: true, sent: true, email };
+}
+
+// ----- Step 2: verify the 6-digit code ---------------------------------------
+
+export async function verifyOtpCode(
+  _prev: LoginState,
+  fd: FormData,
+): Promise<LoginState> {
+  const emailParsed = emailSchema.safeParse(fd.get("email"));
+  const tokenParsed = tokenSchema.safeParse(fd.get("token"));
+
+  if (!emailParsed.success || !tokenParsed.success) {
+    return {
+      ok: false,
+      errors: {
+        email: emailParsed.success ? undefined : "Email missing or invalid.",
+        token: tokenParsed.success ? undefined : "Enter the 6-digit code from your email.",
+      },
+    };
+  }
+
+  const supabase = await createClient();
+
+  const { error } = await supabase.auth.verifyOtp({
+    email: emailParsed.data,
+    token: tokenParsed.data,
+    type: "email",
+  });
+
+  if (error) {
+    return { ok: false, banner: error.message };
+  }
+
+  // Session cookies are now set by the server client's setAll callback.
+  // Bust caches so the layout re-fetches the user, then send them home.
+  revalidatePath("/", "layout");
+  redirect("/");
 }
