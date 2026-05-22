@@ -22,7 +22,11 @@ import {
   updateEventForDetail,
   deleteEventForDetail,
 } from "@/lib/db/events";
-import { getUserContext, type FormActionState } from "@/lib/db/session";
+import {
+  getUserContext,
+  captureValues,
+  type FormActionState,
+} from "@/lib/db/session";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 const resultsArraySchema = z.array(bloodworkResultSchema);
@@ -107,16 +111,29 @@ async function writeResults(
   return { count: parsed.data.length };
 }
 
+// Build an actionable banner sentence from the fieldErrors map so the user
+// doesn't see a generic "invalid input" they have to hunt for. e.g.
+// "Fix the drawn_at, panel_type fields below."
+function bannerFor(fieldErrors: Record<string, string[] | undefined>): string {
+  const names = Object.entries(fieldErrors)
+    .filter(([, v]) => v && v.length)
+    .map(([k]) => k);
+  if (names.length === 0) return "Fix the highlighted fields below.";
+  return `Fix the ${names.join(", ")} field${names.length === 1 ? "" : "s"} below.`;
+}
+
 export async function createBloodwork(
   _prev: FormActionState,
   fd: FormData,
 ): Promise<FormActionState> {
+  const values = captureValues(fd);
   const ctx = await getUserContext();
-  if (!ctx) return { ok: false, banner: "Not signed in." };
+  if (!ctx) return { ok: false, banner: "Not signed in.", values };
 
   const parsed = bloodworkPanelSchema.safeParse(Object.fromEntries(fd));
   if (!parsed.success) {
-    return { ok: false, errors: parsed.error.flatten().fieldErrors };
+    const errors = parsed.error.flatten().fieldErrors;
+    return { ok: false, banner: bannerFor(errors), errors, values };
   }
   const p = parsed.data;
 
@@ -136,7 +153,11 @@ export async function createBloodwork(
     .select("id")
     .single();
   if (insertErr || !panel) {
-    return { ok: false, banner: insertErr?.message ?? "Failed to save panel." };
+    return {
+      ok: false,
+      banner: insertErr?.message ?? "Failed to save panel.",
+      values,
+    };
   }
 
   // 2. Upload the file (if any).
@@ -145,7 +166,7 @@ export async function createBloodwork(
   if (upload.error) {
     // Roll back the panel so we don't leave an orphan.
     await ctx.supabase.schema("wellness").from("bloodwork_panels").delete().eq("id", panel.id);
-    return { ok: false, banner: upload.error };
+    return { ok: false, banner: upload.error, values };
   }
   if (upload.path) {
     await ctx.supabase
@@ -161,7 +182,11 @@ export async function createBloodwork(
   if (results.error) {
     // Don't roll back panel - the file + panel are valid even without
     // structured results. Surface the error so user can retry results entry.
-    return { ok: false, banner: `Panel saved but results failed: ${results.error}` };
+    return {
+      ok: false,
+      banner: `Panel saved but results failed: ${results.error}`,
+      values,
+    };
   }
 
   // 4. Emit event. The panel is the event; results are not.
@@ -181,6 +206,7 @@ export async function createBloodwork(
     return {
       ok: false,
       banner: `Panel saved but event sync failed: ${evtErr.message}`,
+      values,
     };
   }
 
@@ -194,12 +220,14 @@ export async function updateBloodwork(
   _prev: FormActionState,
   fd: FormData,
 ): Promise<FormActionState> {
+  const values = captureValues(fd);
   const ctx = await getUserContext();
-  if (!ctx) return { ok: false, banner: "Not signed in." };
+  if (!ctx) return { ok: false, banner: "Not signed in.", values };
 
   const parsed = bloodworkPanelSchema.safeParse(Object.fromEntries(fd));
   if (!parsed.success) {
-    return { ok: false, errors: parsed.error.flatten().fieldErrors };
+    const errors = parsed.error.flatten().fieldErrors;
+    return { ok: false, banner: bannerFor(errors), errors, values };
   }
   const p = parsed.data;
 
@@ -208,7 +236,7 @@ export async function updateBloodwork(
   let newPath: string | null | undefined = undefined; // undefined = no change
   if (file && file.size > 0) {
     const upload = await uploadPanelFile(ctx.supabase, ctx.userId, id, file);
-    if (upload.error) return { ok: false, banner: upload.error };
+    if (upload.error) return { ok: false, banner: upload.error, values };
     newPath = upload.path;
   }
 
@@ -226,14 +254,18 @@ export async function updateBloodwork(
     .from("bloodwork_panels")
     .update(update)
     .eq("id", id);
-  if (error) return { ok: false, banner: error.message };
+  if (error) return { ok: false, banner: error.message, values };
 
   // Wipe + reinsert results (same approach as workout sub-tables).
   await ctx.supabase.schema("wellness").from("bloodwork_results").delete().eq("panel_id", id);
   const resultsJson = (fd.get("results_json") as string | null) ?? "[]";
   const results = await writeResults(ctx.supabase, ctx.userId, ctx.sourceId, id, resultsJson);
   if (results.error) {
-    return { ok: false, banner: `Panel updated but results failed: ${results.error}` };
+    return {
+      ok: false,
+      banner: `Panel updated but results failed: ${results.error}`,
+      values,
+    };
   }
 
   const eventTs = new Date(`${toDateOnly(p.drawn_at)}T12:00:00Z`).toISOString();

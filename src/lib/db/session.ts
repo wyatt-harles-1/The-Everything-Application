@@ -24,5 +24,25 @@ export async function getUserContext() {
 
 export type FormActionState =
   | { ok: true }
-  | { ok: false; banner?: string; errors?: Record<string, string[] | undefined> }
+  | {
+      ok: false;
+      banner?: string;
+      errors?: Record<string, string[] | undefined>;
+      // What the user just submitted - the form re-hydrates these as
+      // defaultValues so they don't have to retype after a validation fail.
+      // Only scalar fields; arrays managed via useState (lifting_sets,
+      // bloodwork_results) preserve themselves.
+      values?: Record<string, string>;
+    }
   | null;
+
+// Snapshot the scalar fields of a FormData into a plain object suitable for
+// re-hydrating <input defaultValue={...} /> on the next render. File entries
+// are skipped (browsers can't programmatically restore file inputs anyway).
+export function captureValues(fd: FormData): Record<string, string> {
+  const values: Record<string, string> = {};
+  for (const [key, value] of fd.entries()) {
+    if (typeof value === "string") values[key] = value;
+  }
+  return values;
+}

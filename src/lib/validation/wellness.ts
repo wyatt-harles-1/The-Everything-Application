@@ -309,7 +309,10 @@ export type MedicationLogInput = z.infer<typeof medicationLogSchema>;
 // ============================================================================
 
 export const bloodworkPanelSchema = z.object({
-  drawn_at: z.coerce.date(),
+  drawn_at: z.preprocess(
+    (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+    z.coerce.date({ message: "Pick a valid draw date" }),
+  ),
   lab_name: optionalText,
   ordering_provider: optionalText,
   panel_type: optionalText,           // free text: "annual", "thyroid", etc.

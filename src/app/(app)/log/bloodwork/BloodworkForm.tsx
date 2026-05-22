@@ -63,6 +63,12 @@ export function BloodworkForm({
 }) {
   const [state, formAction] = useActionState<FormActionState, FormData>(action, null);
   const errs = state && state.ok === false ? state.errors : undefined;
+  // Values the user just submitted, captured by the Server Action so we
+  // can re-hydrate inputs after a validation failure. Falls back to the
+  // `defaults` prop (used by the edit page) when not present.
+  const submitted = state && state.ok === false ? state.values : undefined;
+  const pick = (name: string, fallback?: string) =>
+    submitted?.[name] ?? fallback ?? "";
 
   const [results, setResults] = useState<ResultDraft[]>(
     defaults.results && defaults.results.length > 0
@@ -89,20 +95,44 @@ export function BloodworkForm({
       ) : null}
 
       <FormField label="Drawn on" htmlFor="drawn_at" required error={errs?.drawn_at?.[0]}>
-        <DatePicker id="drawn_at" name="drawn_at" required defaultValue={defaults.drawn_at} />
+        {/* `key` forces a remount when the submitted value changes - <input>
+            otherwise ignores defaultValue updates after first render. */}
+        <DatePicker
+          id="drawn_at"
+          name="drawn_at"
+          required
+          key={`drawn_at-${submitted ? "s" : "i"}`}
+          defaultValue={pick("drawn_at", defaults.drawn_at)}
+        />
       </FormField>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <FormField label="Lab name" htmlFor="lab_name" error={errs?.lab_name?.[0]}>
-          <TextInput id="lab_name" name="lab_name" placeholder="Quest, Labcorp …" defaultValue={defaults.lab_name} />
+          <TextInput
+            id="lab_name"
+            name="lab_name"
+            placeholder="Quest, Labcorp …"
+            key={`lab_name-${submitted ? "s" : "i"}`}
+            defaultValue={pick("lab_name", defaults.lab_name)}
+          />
         </FormField>
         <FormField label="Ordering provider" htmlFor="ordering_provider" error={errs?.ordering_provider?.[0]}>
-          <TextInput id="ordering_provider" name="ordering_provider" defaultValue={defaults.ordering_provider} />
+          <TextInput
+            id="ordering_provider"
+            name="ordering_provider"
+            key={`ordering_provider-${submitted ? "s" : "i"}`}
+            defaultValue={pick("ordering_provider", defaults.ordering_provider)}
+          />
         </FormField>
       </div>
 
       <FormField label="Panel type" htmlFor="panel_type" hint="annual, thyroid, hormone, lipid …" error={errs?.panel_type?.[0]}>
-        <TextInput id="panel_type" name="panel_type" defaultValue={defaults.panel_type} />
+        <TextInput
+          id="panel_type"
+          name="panel_type"
+          key={`panel_type-${submitted ? "s" : "i"}`}
+          defaultValue={pick("panel_type", defaults.panel_type)}
+        />
       </FormField>
 
       <FormField label="Lab report" htmlFor="file" hint="PDF or image; optional" error={errs?.file?.[0]}>
@@ -239,7 +269,13 @@ export function BloodworkForm({
       </fieldset>
 
       <FormField label="Notes" htmlFor="notes" error={errs?.notes?.[0]}>
-        <TextArea id="notes" name="notes" rows={3} defaultValue={defaults.notes} />
+        <TextArea
+          id="notes"
+          name="notes"
+          rows={3}
+          key={`notes-${submitted ? "s" : "i"}`}
+          defaultValue={pick("notes", defaults.notes)}
+        />
       </FormField>
 
       <SubmitButton>{submitLabel}</SubmitButton>
