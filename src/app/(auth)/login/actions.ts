@@ -1,7 +1,7 @@
 // Server Actions for the OTP-code login flow.
 //
 // Two-step: request the code (email goes out via Resend), then verify the
-// 6-digit code the user types in. PKCE / magic-link is the prior approach -
+// code the user types in. PKCE / magic-link is the prior approach -
 // we abandoned it because the code_verifier cookie only exists on the
 // browser that submitted the request, breaking cross-device sign-in (submit
 // on laptop, open mail on phone).
@@ -18,7 +18,10 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 
 const emailSchema = z.string().trim().toLowerCase().email();
-const tokenSchema = z.string().trim().regex(/^\d{6}$/, "Enter the 6-digit code");
+// Supabase's email OTP length is configurable (4-10 digits) on the hosted
+// dashboard - the current hosted project uses 8. Accept the full supported
+// range so changing it later doesn't silently break sign-in.
+const tokenSchema = z.string().trim().regex(/^\d{4,10}$/, "Enter the code from your email");
 
 export type LoginState =
   | { ok: false; banner?: string; errors?: { email?: string; token?: string } }
@@ -66,7 +69,7 @@ export async function verifyOtpCode(
       ok: false,
       errors: {
         email: emailParsed.success ? undefined : "Email missing or invalid.",
-        token: tokenParsed.success ? undefined : "Enter the 6-digit code from your email.",
+        token: tokenParsed.success ? undefined : "Enter the code from your email.",
       },
     };
   }

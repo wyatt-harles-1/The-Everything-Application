@@ -124,7 +124,7 @@ function CodeStage({
       {/* The email is needed by the verify action - pass it through hidden. */}
       <input type="hidden" name="email" value={email} />
 
-      <FormField label="6-digit code" htmlFor="token" required error={tokenErr}>
+      <FormField label="Code from email" htmlFor="token" required error={tokenErr}>
         <TextInput
           id="token"
           name="token"
@@ -132,10 +132,10 @@ function CodeStage({
           autoComplete="one-time-code"
           autoFocus
           required
-          pattern="\d{6}"
-          maxLength={6}
-          placeholder="123456"
-          className="tracking-[0.5em] text-center text-lg"
+          pattern="\d{4,10}"
+          maxLength={10}
+          placeholder="••••••••"
+          className="tracking-[0.3em] text-center text-lg"
         />
       </FormField>
 
