@@ -15,8 +15,13 @@ export async function GET(request: NextRequest) {
   const next = searchParams.get("next") ?? "/";
 
   if (!code) {
+    // Supabase reports failures by appending its own error_description query
+    // params (otp_expired, access_denied, etc.) — surface those if present so
+    // the user sees a useful message instead of a generic "Missing auth code".
+    const supabaseError = searchParams.get("error_description");
+    const message = supabaseError ?? "Missing auth code.";
     return NextResponse.redirect(
-      `${origin}/login?error=${encodeURIComponent("Missing auth code.")}`,
+      `${origin}/login?error=${encodeURIComponent(message)}`,
     );
   }
 

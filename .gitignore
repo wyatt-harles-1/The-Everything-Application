@@ -52,3 +52,6 @@ supabase/.env
 # Claude Code — per-machine settings (permissions, model choice, etc.).
 # Shared team settings would live in .claude/settings.json which IS committable.
 .claude/settings.local.json
+
+.vercel
+.env*.local
