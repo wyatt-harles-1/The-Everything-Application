@@ -23,8 +23,7 @@ const cards: { href: string; label: string; eta?: string }[] = [
   { href: "/log/cycle/new", label: "Cycle" },
   // Medication links at the hub (not /new) because dose-logging happens there.
   { href: "/log/medication", label: "Medication" },
-  // Wave 3 placeholder so the grid shape stays stable.
-  { href: "#", label: "Bloodwork", eta: "Wave 3" },
+  { href: "/log/bloodwork/new", label: "Bloodwork" },
 ];
 
 // Map event_type → URL prefix for the detail/edit page. Wave 1 covers four;
@@ -47,6 +46,8 @@ function detailPathFor(eventType: string, detailId: string): string | null {
     // doses are edited on the medication hub. Just link there.
     case "medication_taken":
       return `/log/medication`;
+    case "bloodwork_panel":
+      return `/log/bloodwork/${detailId}`;
     default:
       return null;
   }

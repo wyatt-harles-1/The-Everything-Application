@@ -302,3 +302,64 @@ export const medicationLogSchema = z.object({
 });
 
 export type MedicationLogInput = z.infer<typeof medicationLogSchema>;
+
+
+// ============================================================================
+// BLOODWORK - panel header + per-marker results
+// ============================================================================
+
+export const bloodworkPanelSchema = z.object({
+  drawn_at: z.coerce.date(),
+  lab_name: optionalText,
+  ordering_provider: optionalText,
+  panel_type: optionalText,           // free text: "annual", "thyroid", etc.
+  notes: optionalText,
+});
+
+export type BloodworkPanelInput = z.infer<typeof bloodworkPanelSchema>;
+
+export const bloodworkResultFlags = ["high", "low", "normal", "critical"] as const;
+
+// One row in the dynamic results list. At least one of value / value_text
+// must be populated (matches the CHECK constraint on the DB column).
+export const bloodworkResultSchema = z
+  .object({
+    marker_name: z.string().trim().min(1, "Marker name is required"),
+    value: optionalNumber,
+    value_text: optionalText,
+    unit: optionalText,
+    reference_low: optionalNumber,
+    reference_high: optionalNumber,
+    flag: z
+      .preprocess(
+        (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+        z.enum(bloodworkResultFlags),
+      )
+      .optional(),
+    notes: optionalText,
+  })
+  .refine(
+    (r) => r.value != null || (r.value_text != null && r.value_text.length > 0),
+    { message: "Enter a numeric value or a text value", path: ["value"] },
+  );
+
+export type BloodworkResultInput = z.infer<typeof bloodworkResultSchema>;
+
+// Pre-populated quick-add markers shown as buttons on the form. Each click
+// drops a new result row with the name pre-filled. Order is intentional - the
+// most commonly-tracked-first.
+export const quickAddMarkers: { name: string; unit: string }[] = [
+  { name: "TSH",                  unit: "uIU/mL" },
+  { name: "LDL",                  unit: "mg/dL" },
+  { name: "HDL",                  unit: "mg/dL" },
+  { name: "Triglycerides",        unit: "mg/dL" },
+  { name: "Testosterone Total",   unit: "ng/dL" },
+  { name: "Vitamin D, 25-OH",     unit: "ng/mL" },
+  { name: "Hemoglobin A1C",       unit: "%" },
+  { name: "Glucose",              unit: "mg/dL" },
+  { name: "WBC",                  unit: "10^3/uL" },
+  { name: "RBC",                  unit: "10^6/uL" },
+  { name: "Hemoglobin",           unit: "g/dL" },
+  { name: "Hematocrit",           unit: "%" },
+  { name: "Platelets",            unit: "10^3/uL" },
+];
