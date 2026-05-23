@@ -370,6 +370,51 @@ export const exerciseSchema = z.object({
 export type ExerciseInput = z.infer<typeof exerciseSchema>;
 
 
+// ============================================================================
+// WORKOUT TEMPLATES (Phase 3 Wave 2)
+// ============================================================================
+
+// One target set inside a template's planned_sets jsonb array.
+export const plannedSetSchema = z.object({
+  reps:        optionalInt,
+  weight_lbs:  optionalNumber,
+  rpe:         optionalNumber.refine(
+                 (v) => v === undefined || (v >= 1 && v <= 10),
+                 "RPE must be 1-10",
+               ),
+  is_warmup:   z.preprocess(
+                 (v) => v === "on" || v === true || v === "true",
+                 z.boolean(),
+               ),
+  notes:       optionalText,
+});
+
+export type PlannedSetInput = z.infer<typeof plannedSetSchema>;
+
+// One exercise inside a template, with its array of planned sets.
+export const templateExerciseSchema = z.object({
+  exercise_name: z.string().trim().min(1, "Exercise name is required"),
+  position:      z.coerce.number().int().min(0),
+  rest_seconds:  optionalInt,
+  notes:         optionalText,
+  planned_sets:  z.array(plannedSetSchema),
+});
+
+export type TemplateExerciseInput = z.infer<typeof templateExerciseSchema>;
+
+// The full template payload submitted by the builder form.
+export const workoutTemplateSchema = z.object({
+  name:        z.string().trim().min(1, "Name is required"),
+  description: optionalText,
+  notes:       optionalText,
+  // Templates with zero exercises are allowed (you might create the shell
+  // first then come back to fill it). UI nudges toward at least one.
+  exercises:   z.array(templateExerciseSchema),
+});
+
+export type WorkoutTemplateInput = z.infer<typeof workoutTemplateSchema>;
+
+
 // Pre-populated quick-add markers shown as buttons on the form. Each click
 // drops a new result row with the name pre-filled. Order is intentional - the
 // most commonly-tracked-first.

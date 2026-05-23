@@ -49,7 +49,11 @@ export default async function LiftingHubPage() {
           label="Log workout"
           sublabel="manual / retroactive"
         />
-        <HubCard href="#" label="Templates" sublabel="Wave 2" disabled />
+        <HubCard
+          href="/lifting/templates"
+          label="Templates"
+          sublabel="plan & re-run"
+        />
         <HubCard href="#" label="Start session" sublabel="Wave 3" disabled />
       </section>
 
