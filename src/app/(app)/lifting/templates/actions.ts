@@ -307,5 +307,7 @@ export async function startSessionFromTemplate(templateId: string): Promise<void
 
   revalidatePath("/log");
   revalidatePath("/");
-  redirect(`/log/workout/${workout.id}?flash=created`);
+  // Send the user straight into gym-mode for live execution. The
+  // /log/workout/[id] editor remains available for retroactive edits.
+  redirect(`/lifting/session/${workout.id}`);
 }

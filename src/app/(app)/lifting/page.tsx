@@ -26,6 +26,19 @@ export default async function LiftingHubPage() {
     .select("*", { count: "exact", head: true })
     .eq("is_active", true);
 
+  // Surface any in-progress lifting session so the user can resume it after
+  // navigating away. A workout with started_at set but ended_at null IS the
+  // session in progress.
+  const { data: inProgress } = await supabase
+    .schema("wellness")
+    .from("workouts")
+    .select("id, started_at, title")
+    .eq("kind", "lifting")
+    .is("ended_at", null)
+    .order("started_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
   return (
     <div className="space-y-8">
       <header className="space-y-1">
@@ -37,6 +50,23 @@ export default async function LiftingHubPage() {
           flow into the timeline at /log.
         </p>
       </header>
+
+      {inProgress ? (
+        <Link
+          href={`/lifting/session/${inProgress.id}`}
+          className="block rounded-lg border border-emerald-300 bg-emerald-50 p-4 shadow-sm transition-colors hover:bg-emerald-100 dark:border-emerald-700 dark:bg-emerald-950 dark:hover:bg-emerald-900"
+        >
+          <p className="text-xs font-medium uppercase tracking-wider text-emerald-700 dark:text-emerald-300">
+            In progress
+          </p>
+          <p className="mt-0.5 text-sm font-semibold text-emerald-950 dark:text-emerald-50">
+            Resume {inProgress.title ?? "session"} →
+          </p>
+          <p className="mt-0.5 text-xs text-emerald-800 dark:text-emerald-200">
+            Started {formatDateTime(inProgress.started_at)}
+          </p>
+        </Link>
+      ) : null}
 
       <section className="grid grid-cols-2 gap-3">
         <HubCard
@@ -54,7 +84,11 @@ export default async function LiftingHubPage() {
           label="Templates"
           sublabel="plan & re-run"
         />
-        <HubCard href="#" label="Start session" sublabel="Wave 3" disabled />
+        <HubCard
+          href="/lifting/start"
+          label="Start session"
+          sublabel="gym mode"
+        />
       </section>
 
       <section className="space-y-3">
