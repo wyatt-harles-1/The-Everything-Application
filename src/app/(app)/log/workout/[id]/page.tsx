@@ -92,6 +92,17 @@ export default async function WorkoutDetailPage({
     }
   }
 
+  // Pull the user's exercise library for the lifting sub-form's
+  // autocomplete. Cheap query and the form always renders so we don't
+  // gate it on kind.
+  const { data: libExercises } = await supabase
+    .schema("wellness")
+    .from("exercises")
+    .select("name")
+    .eq("is_active", true)
+    .order("name", { ascending: true });
+  const exerciseNames = (libExercises ?? []).map((e) => e.name);
+
   return (
     <div className="space-y-6">
       <header className="space-y-1">
@@ -116,6 +127,7 @@ export default async function WorkoutDetailPage({
         action={updateWorkout.bind(null, id)}
         submitLabel="Update workout"
         defaults={defaults}
+        exerciseNames={exerciseNames}
       />
 
       <hr className="border-zinc-200 dark:border-zinc-800" />

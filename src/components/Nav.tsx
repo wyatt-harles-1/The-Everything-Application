@@ -17,6 +17,7 @@ import { useState } from "react";
 const links = [
   { href: "/", label: "Home" },
   { href: "/log", label: "Log" },
+  { href: "/lifting", label: "Lifting" },
 ];
 
 export function Nav({ email }: { email: string }) {

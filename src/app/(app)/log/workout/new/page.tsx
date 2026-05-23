@@ -1,9 +1,23 @@
 import Link from "next/link";
 
+import { createClient } from "@/lib/supabase/server";
+
 import { WorkoutForm } from "../WorkoutForm";
 import { createWorkout } from "../actions";
 
-export default function NewWorkoutPage() {
+export default async function NewWorkoutPage() {
+  // Pull the user's exercise library so the lifting sub-form can autocomplete
+  // exercise names. The actions.ts side resolves the typed name back to an
+  // exercise_id when it matches.
+  const supabase = await createClient();
+  const { data: exercises } = await supabase
+    .schema("wellness")
+    .from("exercises")
+    .select("name")
+    .eq("is_active", true)
+    .order("name", { ascending: true });
+  const exerciseNames = (exercises ?? []).map((e) => e.name);
+
   return (
     <div className="space-y-6">
       <header className="space-y-1">
@@ -18,7 +32,11 @@ export default function NewWorkoutPage() {
         </h1>
       </header>
 
-      <WorkoutForm action={createWorkout} submitLabel="Save workout" />
+      <WorkoutForm
+        action={createWorkout}
+        submitLabel="Save workout"
+        exerciseNames={exerciseNames}
+      />
     </div>
   );
 }

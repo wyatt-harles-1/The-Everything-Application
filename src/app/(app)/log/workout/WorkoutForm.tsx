@@ -72,10 +72,15 @@ export function WorkoutForm({
   action,
   defaults = {},
   submitLabel,
+  exerciseNames = [],
 }: {
   action: Action;
   defaults?: WorkoutFormDefaults;
   submitLabel: string;
+  /** Names from the user's exercise library, fed into the lifting sets
+   *  autocomplete. Empty if the library is empty - in which case the input
+   *  still works as plain free text. */
+  exerciseNames?: string[];
 }) {
   const [state, formAction] = useActionState<FormActionState, FormData>(
     action,
@@ -211,6 +216,8 @@ export function WorkoutForm({
                   value={s.exercise_name}
                   onChange={(e) => updateSet(i, { exercise_name: e.target.value })}
                   placeholder="Squat, bench, deadlift …"
+                  list="exercise-library-names"
+                  autoCapitalize="words"
                 />
               </FormField>
               <div className="grid grid-cols-3 gap-2">
@@ -272,6 +279,15 @@ export function WorkoutForm({
             name="lifting_sets_json"
             value={JSON.stringify(sets)}
           />
+          {/* Native autocomplete from the exercise library - browser picks
+              this up via the `list` attribute on each exercise input. */}
+          {exerciseNames.length > 0 ? (
+            <datalist id="exercise-library-names">
+              {exerciseNames.map((n) => (
+                <option key={n} value={n} />
+              ))}
+            </datalist>
+          ) : null}
         </fieldset>
       ) : null}
 

@@ -12,6 +12,11 @@
 
 import { z } from "zod";
 
+import {
+  muscleGroups,
+  equipmentTypes,
+} from "@/lib/lifting/starter-exercises";
+
 // ----- shared helpers --------------------------------------------------------
 
 // FormData stringifies every value. An empty string ("") is the FormData
@@ -341,6 +346,29 @@ export const bloodworkResultSchema = z
   );
 
 export type BloodworkResultInput = z.infer<typeof bloodworkResultSchema>;
+
+// ============================================================================
+// EXERCISES (Phase 3 - lifting library)
+// ============================================================================
+
+export const exerciseSchema = z.object({
+  name: z.string().trim().min(1, "Name is required"),
+  muscle_group: z.preprocess(
+    (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+    z.enum(muscleGroups).optional(),
+  ),
+  equipment: z.preprocess(
+    (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+    z.enum(equipmentTypes).optional(),
+  ),
+  instructions: optionalText,
+  notes: optionalText,
+  // The `is_active` toggle is set via a dedicated action (archive / unarchive),
+  // not the standard form; it isn't part of this schema.
+});
+
+export type ExerciseInput = z.infer<typeof exerciseSchema>;
+
 
 // Pre-populated quick-add markers shown as buttons on the form. Each click
 // drops a new result row with the name pre-filled. Order is intentional - the

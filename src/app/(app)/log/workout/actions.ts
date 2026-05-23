@@ -93,6 +93,23 @@ async function writeKindDetail(
       // session record before filling sets in. Just skip child insert.
       return { liftingSetCount: 0 };
     }
+
+    // Resolve exercise names against the user's library so sets get linked
+    // to wellness.exercises.id when the name matches. Case-insensitive
+    // match. Free-text names that don't match a library row still save,
+    // with exercise_id NULL - that's allowed by the CHECK constraint.
+    const { data: libExercises } = await supabase
+      .schema("wellness")
+      .from("exercises")
+      .select("id, name")
+      .eq("user_id", ctx.userId);
+    const libByName = new Map(
+      (libExercises ?? []).map((e) => [
+        e.name.trim().toLowerCase(),
+        e.id as string,
+      ]),
+    );
+
     const { error } = await supabase
       .schema("wellness")
       .from("lifting_sets")
@@ -101,6 +118,8 @@ async function writeKindDetail(
           user_id: ctx.userId,
           source_id: ctx.sourceId,
           workout_id: workoutId,
+          exercise_id:
+            libByName.get(s.exercise_name.trim().toLowerCase()) ?? null,
           exercise_name: s.exercise_name,
           set_number: s.set_number,
           reps: s.reps ?? null,
