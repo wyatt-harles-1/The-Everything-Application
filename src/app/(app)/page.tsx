@@ -52,6 +52,19 @@ export default async function HomePage() {
         </div>
       </section>
 
+      {/* Temporary nav scaffolding before the Phase 4c dashboard redesign.
+          Module hubs land here as they get built; the full dashboard will
+          subsume this section. */}
+      <section className="space-y-3">
+        <h2 className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
+          Sections
+        </h2>
+        <div className="grid grid-cols-2 gap-2">
+          <QuickLink href="/schedule" label="Schedule" />
+          <QuickLink href="/lifting" label="Lifting" />
+        </div>
+      </section>
+
       <section className="space-y-3">
         <h2 className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
           Latest activity
