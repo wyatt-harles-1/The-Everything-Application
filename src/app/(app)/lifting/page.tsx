@@ -145,6 +145,11 @@ export default async function LiftingHubPage() {
           sublabel="volume + PRs"
         />
         <HubCard
+          href="/lifting/rules"
+          label="Rules"
+          sublabel="auto-suggest config"
+        />
+        <HubCard
           href="/log/workout/new"
           label="Log workout"
           sublabel="manual / retroactive"

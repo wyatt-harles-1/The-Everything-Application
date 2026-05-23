@@ -11,7 +11,17 @@ import {
   describeRule,
   type RecurrenceRule,
 } from "@/lib/scheduler/recurrence";
-import { computeHabitProgress } from "@/lib/scheduler/streak";
+import {
+  computeHabitProgress,
+  startOfISOWeek,
+} from "@/lib/scheduler/streak";
+import {
+  suggestLiftingForWeek,
+  type LiftingRules,
+  type ActiveMesoForSuggest,
+} from "@/lib/lifting/suggest";
+
+import { SuggestionsPanel, type Suggestion } from "./SuggestionsPanel";
 
 type ScheduledRow = {
   id: string;
@@ -144,6 +154,88 @@ export default async function SchedulePage({
         .order("occurred_at", { ascending: true })
     : { data: [] };
 
+  // ---- Suggestions: lifting (first module to participate) ---------------
+  // Read the user's lifting_rules (if any) + active mesocycle, then for
+  // this week + next week, propose sessions not already in the agenda.
+  // The panel itself is a client component that calls acceptSuggestion()
+  // per-row.
+  const { data: rulesRow } = await supabase
+    .schema("wellness")
+    .from("lifting_rules")
+    .select(
+      "frequency_per_week, preferred_days, default_time, skip_deload",
+    )
+    .maybeSingle();
+  const liftingRules = rulesRow as LiftingRules | null;
+
+  const suggestions: Suggestion[] = [];
+  if (liftingRules && liftingRules.frequency_per_week > 0) {
+    // Active mesocycle for context (title prefix + deload skip).
+    const { data: mesoRow } = await supabase
+      .schema("wellness")
+      .from("mesocycles")
+      .select(
+        "id, name, started_at, planned_weeks, deload_week_number, ended_at",
+      )
+      .is("ended_at", null)
+      .maybeSingle();
+    const meso = mesoRow as ActiveMesoForSuggest;
+
+    // Existing planned workouts in the upcoming weeks (so we don't double-
+    // suggest a slot the user already has).
+    const horizonStart = startOfISOWeek(new Date());
+    const horizonEnd = new Date(horizonStart);
+    horizonEnd.setDate(horizonEnd.getDate() + 14);
+    const { data: existing } = await supabase
+      .schema("shared")
+      .from("scheduled_events")
+      .select("scheduled_for")
+      .eq("status", "planned")
+      .eq("domain", "wellness")
+      .eq("event_type", "workout")
+      .gte("scheduled_for", horizonStart.toISOString())
+      .lt("scheduled_for", horizonEnd.toISOString());
+    const existingDates = (existing ?? []).map((r) => new Date(r.scheduled_for));
+
+    // This week + next week.
+    for (const offsetWeeks of [0, 1]) {
+      const wkStart = new Date(horizonStart);
+      wkStart.setDate(wkStart.getDate() + offsetWeeks * 7);
+      const wkEnd = new Date(wkStart);
+      wkEnd.setDate(wkEnd.getDate() + 7);
+      const inThisWeek = existingDates.filter(
+        (d) => d >= wkStart && d < wkEnd,
+      );
+      const proposed = suggestLiftingForWeek({
+        rules: liftingRules,
+        meso,
+        weekStart: wkStart,
+        existingWorkoutTimes: inThisWeek,
+      });
+      for (const p of proposed) {
+        const when = new Date(p.scheduled_for);
+        // Skip past times in the current week (showing "lift Mon 5pm" on
+        // Tuesday is just noise).
+        if (when < new Date()) continue;
+        suggestions.push({
+          key: p.scheduled_for,
+          scheduled_for: p.scheduled_for,
+          domain: "wellness",
+          event_type: "workout",
+          title: p.title,
+          dayLabel: when.toLocaleDateString(undefined, {
+            weekday: "short",
+            month: "short",
+            day: "numeric",
+          }),
+          timeLabel: when.toLocaleTimeString(undefined, {
+            timeStyle: "short",
+          }),
+        });
+      }
+    }
+  }
+
   return (
     <div className="space-y-6">
       <header className="space-y-1">
@@ -170,6 +262,8 @@ export default async function SchedulePage({
       >
         + Add to schedule
       </Link>
+
+      <SuggestionsPanel suggestions={suggestions} />
 
       {habits.length > 0 ? (
         <section className="space-y-2">

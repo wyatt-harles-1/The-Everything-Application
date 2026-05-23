@@ -352,6 +352,40 @@ export async function reopenScheduledEvent(id: string): Promise<void> {
   redirect(`/schedule/${id}?flash=reopened`);
 }
 
+// Accept a suggestion: insert a new scheduled_events row from suggestion
+// fields. Tool-shaped (invariant #7) - same surface the Phase 4e master
+// agent will call to "schedule the lift you suggested for Friday."
+export async function acceptSuggestion(input: {
+  scheduled_for: string;
+  domain: string;
+  event_type: string;
+  title: string;
+  notes?: string | null;
+}): Promise<{ ok: boolean; id?: string; error?: string }> {
+  const ctx = await getUserContext();
+  if (!ctx) return { ok: false, error: "Not signed in" };
+
+  const { data, error } = await ctx.supabase
+    .schema("shared")
+    .from("scheduled_events")
+    .insert({
+      user_id: ctx.userId,
+      source_id: ctx.sourceId,
+      domain: input.domain,
+      event_type: input.event_type,
+      scheduled_for: input.scheduled_for,
+      title: input.title,
+      notes: input.notes ?? null,
+    })
+    .select("id")
+    .single();
+  if (error || !data) return { ok: false, error: error?.message ?? "insert failed" };
+
+  revalidatePath("/schedule");
+  revalidatePath("/");
+  return { ok: true, id: data.id };
+}
+
 export async function deleteScheduledEvent(id: string): Promise<void> {
   const ctx = await getUserContext();
   if (!ctx) redirect("/login");
