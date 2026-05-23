@@ -16,36 +16,36 @@ import { z } from "zod";
 
 // FormData stringifies every value. An empty string ("") is the FormData
 // equivalent of "user left this blank" - which we want to treat as undefined
-// so optional fields stay optional in Zod. Each `optional*` helper below
-// applies that same preprocess before its target type.
+// so optional fields stay optional in Zod.
+//
+// IMPORTANT: `.optional()` must live INSIDE the preprocess's inner schema,
+// not outside. In Zod 4 a `.optional()` on the outer chain only short-
+// circuits when the *raw input* is undefined; for an empty string the
+// preprocess still runs first, returns undefined, then the inner schema
+// (z.string(), z.coerce.number(), etc.) sees undefined and rejects it.
+// Putting `.optional()` inside makes the inner schema accept undefined
+// directly. (Earlier draft had `.optional()` on the outside; that made
+// every "optional" field act as required.)
 
-const optionalText = z
-  .preprocess(
-    (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
-    z.string(),
-  )
-  .optional();
+const optionalText = z.preprocess(
+  (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+  z.string().optional(),
+);
 
-const optionalInt = z
-  .preprocess(
-    (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
-    z.coerce.number().int(),
-  )
-  .optional();
+const optionalInt = z.preprocess(
+  (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+  z.coerce.number().int().optional(),
+);
 
-const optionalNumber = z
-  .preprocess(
-    (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
-    z.coerce.number(),
-  )
-  .optional();
+const optionalNumber = z.preprocess(
+  (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+  z.coerce.number().optional(),
+);
 
-const optionalDate = z
-  .preprocess(
-    (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
-    z.coerce.date(),
-  )
-  .optional();
+const optionalDate = z.preprocess(
+  (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+  z.coerce.date().optional(),
+);
 
 // ============================================================================
 // WORKOUTS - parent + per-kind children
@@ -131,8 +131,8 @@ export const mealSchema = z.object({
   occurred_at: z.coerce.date(),
   meal_type: z.preprocess(
     (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
-    z.enum(mealTypes),
-  ).optional(),
+    z.enum(mealTypes).optional(),
+  ),
   description: z.string().trim().min(1, "Description is required"),
   calories: optionalInt,
   protein_g: optionalNumber,
@@ -240,18 +240,14 @@ export const cycleFlows = ["none", "light", "medium", "heavy"] as const;
 // <input type="date"> which posts "YYYY-MM-DD".
 export const cycleEntrySchema = z.object({
   occurred_at: z.coerce.date(),
-  phase: z
-    .preprocess(
-      (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
-      z.enum(cyclePhases),
-    )
-    .optional(),
-  flow: z
-    .preprocess(
-      (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
-      z.enum(cycleFlows),
-    )
-    .optional(),
+  phase: z.preprocess(
+    (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+    z.enum(cyclePhases).optional(),
+  ),
+  flow: z.preprocess(
+    (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+    z.enum(cycleFlows).optional(),
+  ),
   // Symptoms come from a TagInput like mood.tags.
   symptoms: z.preprocess(
     (v) => {
@@ -333,12 +329,10 @@ export const bloodworkResultSchema = z
     unit: optionalText,
     reference_low: optionalNumber,
     reference_high: optionalNumber,
-    flag: z
-      .preprocess(
-        (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
-        z.enum(bloodworkResultFlags),
-      )
-      .optional(),
+    flag: z.preprocess(
+      (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+      z.enum(bloodworkResultFlags).optional(),
+    ),
     notes: optionalText,
   })
   .refine(
