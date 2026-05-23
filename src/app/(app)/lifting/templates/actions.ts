@@ -282,6 +282,8 @@ export async function startSessionFromTemplate(templateId: string): Promise<void
       reps?: number | null;
       weight_lbs?: number | null;
       rpe?: number | null;
+      rir?: number | null;
+      tempo?: string | null;
       is_warmup?: boolean;
       notes?: string | null;
     }>;
@@ -296,6 +298,8 @@ export async function startSessionFromTemplate(templateId: string): Promise<void
         reps: p.reps ?? null,
         weight_lbs: p.weight_lbs ?? null,
         rpe: p.rpe ?? null,
+        rir: p.rir ?? null,
+        tempo: p.tempo ?? null,
         is_warmup: p.is_warmup ?? false,
         notes: p.notes ?? null,
       });

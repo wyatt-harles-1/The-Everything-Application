@@ -48,6 +48,8 @@ export async function createExercise(
       name: e.name,
       muscle_group: e.muscle_group ?? null,
       equipment: e.equipment ?? null,
+      default_rest_seconds: e.default_rest_seconds ?? null,
+      is_bodyweight: e.is_bodyweight,
       instructions: e.instructions ?? null,
       notes: e.notes ?? null,
     })
@@ -89,6 +91,8 @@ export async function updateExercise(
       name: e.name,
       muscle_group: e.muscle_group ?? null,
       equipment: e.equipment ?? null,
+      default_rest_seconds: e.default_rest_seconds ?? null,
+      is_bodyweight: e.is_bodyweight,
       instructions: e.instructions ?? null,
       notes: e.notes ?? null,
     })

@@ -28,7 +28,7 @@ export default async function SessionPage({
   const { data: sets } = await supabase
     .schema("wellness")
     .from("lifting_sets")
-    .select("id, set_number, exercise_id, exercise_name, reps, weight_lbs, rpe, e1rm_lbs, is_warmup, completed_at")
+    .select("id, set_number, exercise_id, exercise_name, reps, weight_lbs, rpe, rir, tempo, e1rm_lbs, is_warmup, completed_at")
     .eq("workout_id", id)
     .order("set_number", { ascending: true });
 
@@ -46,6 +46,8 @@ export default async function SessionPage({
         key,
         exerciseId: s.exercise_id ?? null,
         name: s.exercise_name ?? "Unnamed",
+        defaultRestSeconds: null,
+        isBodyweight: false,
         lastPerformance: null,
         sets: [],
       });
@@ -56,11 +58,44 @@ export default async function SessionPage({
       reps: s.reps,
       weightLbs: s.weight_lbs,
       rpe: s.rpe,
+      rir: s.rir != null ? Number(s.rir) : null,
+      tempo: s.tempo,
       e1rmLbs: s.e1rm_lbs != null ? Number(s.e1rm_lbs) : null,
       isWarmup: s.is_warmup,
       completedAt: s.completed_at,
       isPR: false, // filled below once we know the all-time best
     });
+  }
+
+  // Pull exercise-level metadata (default rest, bodyweight flag) for the
+  // session UI. Per-exercise rest drives the gym-mode timer length and the
+  // bodyweight flag changes the weight display to "+X lbs added".
+  const exerciseIds = Array.from(grouped.values())
+    .map((ex) => ex.exerciseId)
+    .filter((x): x is string => x !== null);
+  if (exerciseIds.length > 0) {
+    const { data: meta } = await supabase
+      .schema("wellness")
+      .from("exercises")
+      .select("id, default_rest_seconds, is_bodyweight")
+      .in("id", exerciseIds);
+    const metaById = new Map(
+      (meta ?? []).map((m) => [
+        m.id,
+        {
+          defaultRestSeconds: m.default_rest_seconds as number | null,
+          isBodyweight: !!m.is_bodyweight,
+        },
+      ]),
+    );
+    for (const ex of grouped.values()) {
+      if (!ex.exerciseId) continue;
+      const m = metaById.get(ex.exerciseId);
+      if (m) {
+        ex.defaultRestSeconds = m.defaultRestSeconds;
+        ex.isBodyweight = m.isBodyweight;
+      }
+    }
   }
 
   // Per-exercise: pull both the most-recent prior completed set (for the

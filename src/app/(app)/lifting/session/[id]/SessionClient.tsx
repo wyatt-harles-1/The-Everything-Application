@@ -31,6 +31,8 @@ export type SessionSet = {
   reps: number | null;
   weightLbs: number | null;
   rpe: number | null;
+  rir: number | null;
+  tempo: string | null;
   e1rmLbs: number | null;
   isWarmup: boolean;
   completedAt: string | null;
@@ -44,6 +46,10 @@ export type SessionExercise = {
   key: string;
   exerciseId: string | null;
   name: string;
+  // Per-exercise overrides plumbed in from the page's join on
+  // wellness.exercises. Null defaults => use the 90s global fallback.
+  defaultRestSeconds: number | null;
+  isBodyweight: boolean;
   lastPerformance: {
     reps: number | null;
     weightLbs: number | null;
@@ -133,25 +139,22 @@ export function SessionClient({
 
   function onSetFieldBlur(
     setId: string,
-    field: "reps" | "weight_lbs" | "rpe",
+    field: "reps" | "weight_lbs" | "rpe" | "rir" | "tempo",
     rawValue: string,
   ) {
     // Persist what was typed. Empty string -> null on the server side.
     updateSetValues(setId, { [field]: rawValue }).catch(console.error);
   }
 
-  function onToggleComplete(set: SessionSet, exerciseKey: string) {
+  function onToggleComplete(set: SessionSet, ex: SessionExercise) {
     const nowComplete = !set.completedAt;
     patchSet(set.id, {
       completedAt: nowComplete ? new Date().toISOString() : null,
     });
     toggleSetComplete(set.id, nowComplete).catch(console.error);
     if (nowComplete && !set.isWarmup) {
-      setRestRemaining(DEFAULT_REST_SECONDS);
+      setRestRemaining(ex.defaultRestSeconds ?? DEFAULT_REST_SECONDS);
     }
-    // Reference the key so the lint rule about unused params is satisfied
-    // and so future per-exercise rest_seconds can plug in here.
-    void exerciseKey;
   }
 
   function onAddSet(ex: SessionExercise) {
@@ -170,6 +173,8 @@ export function SessionClient({
                   reps: lastSet?.reps ?? null,
                   weightLbs: lastSet?.weightLbs ?? null,
                   rpe: null,
+                  rir: null,
+                  tempo: lastSet?.tempo ?? null,
                   e1rmLbs: null,
                   isWarmup: false,
                   completedAt: null,
@@ -273,7 +278,7 @@ export function SessionClient({
             key={ex.key}
             exercise={ex}
             onUpdateField={onSetFieldBlur}
-            onToggleComplete={(s) => onToggleComplete(s, ex.key)}
+            onToggleComplete={(s) => onToggleComplete(s, ex)}
             onAddSet={() => onAddSet(ex)}
             onRemoveSet={onRemoveSet}
             patchSet={patchSet}
@@ -351,7 +356,7 @@ function ExerciseCard({
   exercise: SessionExercise;
   onUpdateField: (
     setId: string,
-    field: "reps" | "weight_lbs" | "rpe",
+    field: "reps" | "weight_lbs" | "rpe" | "rir" | "tempo",
     value: string,
   ) => void;
   onToggleComplete: (set: SessionSet) => void;
@@ -359,14 +364,25 @@ function ExerciseCard({
   onRemoveSet: (setId: string) => void;
   patchSet: (setId: string, patch: Partial<SessionSet>) => void;
 }) {
+  // For bodyweight movements the "last:" hint reads "+25×5" instead of
+  // "25×5" so the lifter understands the figure as added load, not total.
+  const weightPrefix = exercise.isBodyweight ? "+" : "";
   return (
     <section className="space-y-3 rounded-lg border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950">
       <header className="flex items-baseline justify-between gap-3">
-        <h2 className="text-sm font-semibold">{exercise.name}</h2>
+        <h2 className="text-sm font-semibold">
+          {exercise.name}
+          {exercise.isBodyweight ? (
+            <span className="ml-1.5 rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+              BW
+            </span>
+          ) : null}
+        </h2>
         {exercise.lastPerformance ? (
           <span className="text-xs text-zinc-500 dark:text-zinc-400">
             last {formatRelative(exercise.lastPerformance.completedAt)}:{" "}
             <span className="font-medium text-zinc-950 dark:text-zinc-50">
+              {weightPrefix}
               {exercise.lastPerformance.weightLbs ?? "?"}×
               {exercise.lastPerformance.reps ?? "?"}
             </span>
@@ -379,6 +395,7 @@ function ExerciseCard({
           <SetRow
             key={s.id}
             set={s}
+            isBodyweight={exercise.isBodyweight}
             onUpdateField={onUpdateField}
             onToggleComplete={() => onToggleComplete(s)}
             onRemove={() => onRemoveSet(s.id)}
@@ -400,15 +417,17 @@ function ExerciseCard({
 
 function SetRow({
   set,
+  isBodyweight,
   onUpdateField,
   onToggleComplete,
   onRemove,
   patchSet,
 }: {
   set: SessionSet;
+  isBodyweight: boolean;
   onUpdateField: (
     setId: string,
-    field: "reps" | "weight_lbs" | "rpe",
+    field: "reps" | "weight_lbs" | "rpe" | "rir" | "tempo",
     value: string,
   ) => void;
   onToggleComplete: () => void;
@@ -416,86 +435,156 @@ function SetRow({
   patchSet: (setId: string, patch: Partial<SessionSet>) => void;
 }) {
   const done = !!set.completedAt;
+  // The "details" row (tempo + RIR + notes) is hidden by default to keep
+  // the main row compact - power-users can open it when they want to log
+  // RP-style fields. Initial state opens it if either field already has a
+  // value (mirrors how Strong handles "advanced" set fields).
+  const [detailsOpen, setDetailsOpen] = useState<boolean>(
+    set.tempo != null || set.rir != null,
+  );
 
   return (
     <li
-      className={`flex items-center gap-2 rounded-md p-2 transition-colors ${
+      className={`space-y-1.5 rounded-md p-2 transition-colors ${
         done
           ? "bg-emerald-50 dark:bg-emerald-950/50"
           : "bg-zinc-50 dark:bg-zinc-900/40"
       }`}
     >
-      <span className="w-12 shrink-0 text-xs font-medium text-zinc-500 dark:text-zinc-400">
-        {set.isWarmup ? "W" : set.setNumber}
-        {set.isPR ? (
-          <span className="ml-0.5 text-amber-600 dark:text-amber-300" aria-label="personal record">
-            🏆
-          </span>
-        ) : null}
-      </span>
-      <input
-        type="number"
-        inputMode="numeric"
-        min={0}
-        step={1}
-        defaultValue={set.reps ?? ""}
-        onBlur={(e) => onUpdateField(set.id, "reps", e.target.value)}
-        onChange={(e) =>
-          patchSet(set.id, { reps: e.target.value === "" ? null : Number(e.target.value) })
-        }
-        aria-label="reps"
-        className="min-h-10 w-14 rounded border border-zinc-300 bg-white px-1.5 text-center text-sm tabular-nums focus:border-zinc-950 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:focus:border-zinc-50"
-      />
-      <span className="text-xs text-zinc-400">×</span>
-      <input
-        type="number"
-        inputMode="decimal"
-        min={0}
-        step="2.5"
-        defaultValue={set.weightLbs ?? ""}
-        onBlur={(e) => onUpdateField(set.id, "weight_lbs", e.target.value)}
-        onChange={(e) =>
-          patchSet(set.id, { weightLbs: e.target.value === "" ? null : Number(e.target.value) })
-        }
-        aria-label="weight"
-        className="min-h-10 w-20 rounded border border-zinc-300 bg-white px-1.5 text-center text-sm tabular-nums focus:border-zinc-950 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:focus:border-zinc-50"
-      />
-      <span className="text-xs text-zinc-400">@</span>
-      <input
-        type="number"
-        inputMode="decimal"
-        min={1}
-        max={10}
-        step="0.5"
-        defaultValue={set.rpe ?? ""}
-        onBlur={(e) => onUpdateField(set.id, "rpe", e.target.value)}
-        onChange={(e) =>
-          patchSet(set.id, { rpe: e.target.value === "" ? null : Number(e.target.value) })
-        }
-        aria-label="rpe"
-        placeholder="rpe"
-        className="min-h-10 w-12 rounded border border-zinc-300 bg-white px-1.5 text-center text-sm tabular-nums focus:border-zinc-950 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:focus:border-zinc-50"
-      />
-      <button
-        type="button"
-        onClick={onToggleComplete}
-        aria-label={done ? "Mark incomplete" : "Mark complete"}
-        className={`ml-auto flex h-10 w-10 items-center justify-center rounded-md text-lg ${
-          done
-            ? "bg-emerald-600 text-white"
-            : "border border-zinc-300 text-zinc-400 hover:border-zinc-500 hover:text-zinc-950 dark:border-zinc-700 dark:hover:border-zinc-500 dark:hover:text-zinc-50"
-        }`}
-      >
-        {done ? "✓" : "○"}
-      </button>
-      <button
-        type="button"
-        onClick={onRemove}
-        aria-label="Remove set"
-        className="h-10 w-8 text-xs text-zinc-400 hover:text-red-600 dark:hover:text-red-400"
-      >
-        ×
-      </button>
+      <div className="flex items-center gap-2">
+        <span className="w-12 shrink-0 text-xs font-medium text-zinc-500 dark:text-zinc-400">
+          {set.isWarmup ? "W" : set.setNumber}
+          {set.isPR ? (
+            <span className="ml-0.5 text-amber-600 dark:text-amber-300" aria-label="personal record">
+              🏆
+            </span>
+          ) : null}
+        </span>
+        <input
+          type="number"
+          inputMode="numeric"
+          min={0}
+          step={1}
+          defaultValue={set.reps ?? ""}
+          onBlur={(e) => onUpdateField(set.id, "reps", e.target.value)}
+          onChange={(e) =>
+            patchSet(set.id, { reps: e.target.value === "" ? null : Number(e.target.value) })
+          }
+          aria-label="reps"
+          className="min-h-10 w-14 rounded border border-zinc-300 bg-white px-1.5 text-center text-sm tabular-nums focus:border-zinc-950 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:focus:border-zinc-50"
+        />
+        <span className="text-xs text-zinc-400">×</span>
+        <div className="relative">
+          {isBodyweight ? (
+            <span
+              className="pointer-events-none absolute left-1.5 top-1/2 -translate-y-1/2 text-xs font-medium text-zinc-400 dark:text-zinc-500"
+              aria-hidden
+            >
+              +
+            </span>
+          ) : null}
+          <input
+            type="number"
+            inputMode="decimal"
+            min={0}
+            step="2.5"
+            defaultValue={set.weightLbs ?? ""}
+            onBlur={(e) => onUpdateField(set.id, "weight_lbs", e.target.value)}
+            onChange={(e) =>
+              patchSet(set.id, {
+                weightLbs: e.target.value === "" ? null : Number(e.target.value),
+              })
+            }
+            aria-label={isBodyweight ? "added weight" : "weight"}
+            className={`min-h-10 w-20 rounded border border-zinc-300 bg-white text-center text-sm tabular-nums focus:border-zinc-950 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:focus:border-zinc-50 ${
+              isBodyweight ? "pl-4 pr-1.5" : "px-1.5"
+            }`}
+          />
+        </div>
+        <span className="text-xs text-zinc-400">@</span>
+        <input
+          type="number"
+          inputMode="decimal"
+          min={1}
+          max={10}
+          step="0.5"
+          defaultValue={set.rpe ?? ""}
+          onBlur={(e) => onUpdateField(set.id, "rpe", e.target.value)}
+          onChange={(e) =>
+            patchSet(set.id, { rpe: e.target.value === "" ? null : Number(e.target.value) })
+          }
+          aria-label="rpe"
+          placeholder="rpe"
+          className="min-h-10 w-12 rounded border border-zinc-300 bg-white px-1.5 text-center text-sm tabular-nums focus:border-zinc-950 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:focus:border-zinc-50"
+        />
+        <button
+          type="button"
+          onClick={() => setDetailsOpen((v) => !v)}
+          aria-label={detailsOpen ? "Hide tempo + RIR" : "Show tempo + RIR"}
+          aria-expanded={detailsOpen}
+          className="h-10 w-7 text-xs text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
+        >
+          {detailsOpen ? "▾" : "▸"}
+        </button>
+        <button
+          type="button"
+          onClick={onToggleComplete}
+          aria-label={done ? "Mark incomplete" : "Mark complete"}
+          className={`ml-auto flex h-10 w-10 items-center justify-center rounded-md text-lg ${
+            done
+              ? "bg-emerald-600 text-white"
+              : "border border-zinc-300 text-zinc-400 hover:border-zinc-500 hover:text-zinc-950 dark:border-zinc-700 dark:hover:border-zinc-500 dark:hover:text-zinc-50"
+          }`}
+        >
+          {done ? "✓" : "○"}
+        </button>
+        <button
+          type="button"
+          onClick={onRemove}
+          aria-label="Remove set"
+          className="h-10 w-8 text-xs text-zinc-400 hover:text-red-600 dark:hover:text-red-400"
+        >
+          ×
+        </button>
+      </div>
+      {detailsOpen ? (
+        <div className="flex items-center gap-2 pl-14 text-xs">
+          <label className="flex items-center gap-1 text-zinc-500 dark:text-zinc-400">
+            <span>tempo</span>
+            <input
+              type="text"
+              defaultValue={set.tempo ?? ""}
+              onBlur={(e) => onUpdateField(set.id, "tempo", e.target.value)}
+              onChange={(e) =>
+                patchSet(set.id, { tempo: e.target.value === "" ? null : e.target.value })
+              }
+              aria-label="tempo (eccentric-pause-concentric-rest)"
+              placeholder="3-1-1-0"
+              className="min-h-9 w-20 rounded border border-zinc-300 bg-white px-1.5 text-center text-xs tabular-nums focus:border-zinc-950 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:focus:border-zinc-50"
+            />
+          </label>
+          <label className="flex items-center gap-1 text-zinc-500 dark:text-zinc-400">
+            <span>RIR</span>
+            <input
+              type="number"
+              inputMode="decimal"
+              min={0}
+              max={10}
+              step="0.5"
+              defaultValue={set.rir ?? ""}
+              onBlur={(e) => onUpdateField(set.id, "rir", e.target.value)}
+              onChange={(e) =>
+                patchSet(set.id, {
+                  rir: e.target.value === "" ? null : Number(e.target.value),
+                })
+              }
+              aria-label="reps in reserve"
+              placeholder="2"
+              className="min-h-9 w-12 rounded border border-zinc-300 bg-white px-1.5 text-center text-xs tabular-nums focus:border-zinc-950 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:focus:border-zinc-50"
+            />
+          </label>
+        </div>
+      ) : null}
     </li>
   );
 }

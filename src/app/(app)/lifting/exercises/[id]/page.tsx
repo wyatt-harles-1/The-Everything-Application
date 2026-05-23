@@ -46,7 +46,7 @@ export default async function ExerciseDetailPage({
     .schema("wellness")
     .from("lifting_sets")
     .select(
-      "id, set_number, reps, weight_lbs, rpe, e1rm_lbs, is_warmup, notes, completed_at, workout_id, created_at, workouts:workout_id(id, started_at, title)",
+      "id, set_number, reps, weight_lbs, rpe, rir, tempo, e1rm_lbs, is_warmup, notes, completed_at, workout_id, created_at, workouts:workout_id(id, started_at, title)",
     )
     .eq("exercise_id", id)
     .order("created_at", { ascending: false })
@@ -99,6 +99,8 @@ export default async function ExerciseDetailPage({
           name: exercise.name,
           muscle_group: exercise.muscle_group ?? "",
           equipment: exercise.equipment ?? "",
+          default_rest_seconds: exercise.default_rest_seconds,
+          is_bodyweight: !!exercise.is_bodyweight,
           instructions: exercise.instructions ?? "",
           notes: exercise.notes ?? "",
         }}
@@ -215,8 +217,12 @@ export default async function ExerciseDetailPage({
                     <p className="mt-0.5 text-sm">
                       {[
                         s.reps != null ? `${s.reps} reps` : null,
-                        s.weight_lbs != null ? `${s.weight_lbs} lbs` : null,
+                        s.weight_lbs != null
+                          ? `${exercise.is_bodyweight ? "+" : ""}${s.weight_lbs} lbs`
+                          : null,
                         s.rpe != null ? `RPE ${s.rpe}` : null,
+                        s.rir != null ? `RIR ${Number(s.rir)}` : null,
+                        s.tempo ? `tempo ${s.tempo}` : null,
                         s.e1rm_lbs != null
                           ? `e1RM ${Number(s.e1rm_lbs).toFixed(1)}`
                           : null,

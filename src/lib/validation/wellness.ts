@@ -96,6 +96,15 @@ export const liftingSetSchema = z.object({
     (v) => v === undefined || (v >= 1 && v <= 10),
     "RPE must be 1-10",
   ),
+  // Reps in reserve - RP-style alternative to RPE. Some coaches prescribe
+  // one and not the other; we store whichever the user records.
+  rir: optionalNumber.refine(
+    (v) => v === undefined || (v >= 0 && v <= 10),
+    "RIR must be 0-10",
+  ),
+  // "3-1-1-0" eccentric-pause-concentric-rest tempo string. Free-text;
+  // not parsed at the DB level.
+  tempo: optionalText,
   is_warmup: z.preprocess(
     // Checkboxes either send "on" or omit the field entirely.
     (v) => v === "on" || v === true || v === "true",
@@ -361,6 +370,18 @@ export const exerciseSchema = z.object({
     (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
     z.enum(equipmentTypes).optional(),
   ),
+  // Per-exercise default rest seconds for the gym-mode timer. NULL = use
+  // the 90s global default.
+  default_rest_seconds: optionalInt.refine(
+    (v) => v === undefined || v >= 0,
+    "Rest must be non-negative",
+  ),
+  // When true, lifting_sets.weight_lbs represents ADDED weight on top of
+  // the user's bodyweight (weighted pullup = +25 lbs). UI surfaces "+X".
+  is_bodyweight: z.preprocess(
+    (v) => v === "on" || v === true || v === "true",
+    z.boolean(),
+  ),
   instructions: optionalText,
   notes: optionalText,
   // The `is_active` toggle is set via a dedicated action (archive / unarchive),
@@ -382,6 +403,11 @@ export const plannedSetSchema = z.object({
                  (v) => v === undefined || (v >= 1 && v <= 10),
                  "RPE must be 1-10",
                ),
+  rir:         optionalNumber.refine(
+                 (v) => v === undefined || (v >= 0 && v <= 10),
+                 "RIR must be 0-10",
+               ),
+  tempo:       optionalText,
   is_warmup:   z.preprocess(
                  (v) => v === "on" || v === true || v === "true",
                  z.boolean(),

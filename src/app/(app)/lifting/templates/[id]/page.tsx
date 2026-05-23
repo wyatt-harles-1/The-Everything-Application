@@ -17,6 +17,8 @@ type RawPlannedSet = {
   reps?: number | null;
   weight_lbs?: number | null;
   rpe?: number | null;
+  rir?: number | null;
+  tempo?: string | null;
   is_warmup?: boolean;
   notes?: string | null;
 };
@@ -57,6 +59,8 @@ export default async function TemplateDetailPage({
         reps: s.reps != null ? String(s.reps) : "",
         weight_lbs: s.weight_lbs != null ? String(s.weight_lbs) : "",
         rpe: s.rpe != null ? String(s.rpe) : "",
+        rir: s.rir != null ? String(s.rir) : "",
+        tempo: s.tempo ?? "",
         is_warmup: s.is_warmup ?? false,
         notes: s.notes ?? "",
       }),

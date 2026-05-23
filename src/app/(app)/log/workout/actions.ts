@@ -125,6 +125,8 @@ async function writeKindDetail(
           reps: s.reps ?? null,
           weight_lbs: s.weight_lbs ?? null,
           rpe: s.rpe ?? null,
+          rir: s.rir ?? null,
+          tempo: s.tempo ?? null,
           is_warmup: s.is_warmup,
           notes: s.notes ?? null,
         })),

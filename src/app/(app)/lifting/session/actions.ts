@@ -59,7 +59,13 @@ export async function startBlankSession(): Promise<void> {
 
 export async function updateSetValues(
   setId: string,
-  values: { reps?: string; weight_lbs?: string; rpe?: string },
+  values: {
+    reps?: string;
+    weight_lbs?: string;
+    rpe?: string;
+    rir?: string;
+    tempo?: string;
+  },
 ): Promise<void> {
   const ctx = await getUserContext();
   if (!ctx) redirect("/login");
@@ -69,15 +75,25 @@ export async function updateSetValues(
     const n = Number(s);
     return Number.isFinite(n) ? n : null;
   };
+  const parseText = (s: string | undefined): string | null =>
+    s === undefined || s === null || s.trim() === "" ? null : s.trim();
+
+  // Build the patch dynamically so each field only writes when the caller
+  // actually included it - the gym-mode UI fires this per blurred input,
+  // so an unrelated field shouldn't get nulled out.
+  const patch: Record<string, number | string | null> = {};
+  if ("reps" in values) patch.reps = parseNum(values.reps);
+  if ("weight_lbs" in values) patch.weight_lbs = parseNum(values.weight_lbs);
+  if ("rpe" in values) patch.rpe = parseNum(values.rpe);
+  if ("rir" in values) patch.rir = parseNum(values.rir);
+  if ("tempo" in values) patch.tempo = parseText(values.tempo);
+
+  if (Object.keys(patch).length === 0) return;
 
   await ctx.supabase
     .schema("wellness")
     .from("lifting_sets")
-    .update({
-      reps: parseNum(values.reps),
-      weight_lbs: parseNum(values.weight_lbs),
-      rpe: parseNum(values.rpe),
-    })
+    .update(patch)
     .eq("id", setId);
 }
 
@@ -128,12 +144,14 @@ export async function addSetForExercise(
     .limit(1);
   const nextSetNumber = (existing?.[0]?.set_number ?? 0) + 1;
 
-  // Carry forward the previous set's weight + reps so the user only has to
-  // adjust if they're changing. Strong-app behavior.
+  // Carry forward the previous set's weight + reps + tempo so the user only
+  // has to adjust if they're changing. Strong-app behavior. RPE + RIR are
+  // intentionally NOT carried over - those reflect how hard the last set
+  // was, not a prescription for the next.
   const { data: lastSet } = await ctx.supabase
     .schema("wellness")
     .from("lifting_sets")
-    .select("reps, weight_lbs, rpe")
+    .select("reps, weight_lbs, tempo")
     .eq("workout_id", workoutId)
     .eq("exercise_name", exercise.name)
     .order("set_number", { ascending: false })
@@ -152,7 +170,7 @@ export async function addSetForExercise(
       set_number: nextSetNumber,
       reps: lastSet?.reps ?? null,
       weight_lbs: lastSet?.weight_lbs ?? null,
-      rpe: lastSet?.rpe ?? null,
+      tempo: lastSet?.tempo ?? null,
       is_warmup: false,
     });
 }

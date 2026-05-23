@@ -26,6 +26,8 @@ export type PlannedSetDraft = {
   reps: string;
   weight_lbs: string;
   rpe: string;
+  rir: string;
+  tempo: string;
   is_warmup: boolean;
   notes: string;
 };
@@ -49,6 +51,8 @@ function emptySet(): PlannedSetDraft {
     reps: "",
     weight_lbs: "",
     rpe: "",
+    rir: "",
+    tempo: "",
     is_warmup: false,
     notes: "",
   };
@@ -307,6 +311,24 @@ export function TemplateForm({
                         step="0.5"
                         value={s.rpe}
                         onChange={(e) => updateSet(eIdx, sIdx, { rpe: e.target.value })}
+                      />
+                    </FormField>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <FormField label="Tempo" hint="e.g. 3-1-1-0">
+                      <TextInput
+                        value={s.tempo}
+                        onChange={(e) => updateSet(eIdx, sIdx, { tempo: e.target.value })}
+                        placeholder="3-1-1-0"
+                      />
+                    </FormField>
+                    <FormField label="RIR" hint="reps in reserve, 0-10">
+                      <NumberInput
+                        min={0}
+                        max={10}
+                        step="0.5"
+                        value={s.rir}
+                        onChange={(e) => updateSet(eIdx, sIdx, { rir: e.target.value })}
                       />
                     </FormField>
                   </div>

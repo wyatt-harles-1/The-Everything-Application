@@ -5,6 +5,7 @@ import { useActionState } from "react";
 import { FormField } from "@/components/forms/FormField";
 import { TextInput } from "@/components/forms/TextInput";
 import { TextArea } from "@/components/forms/TextArea";
+import { NumberInput } from "@/components/forms/NumberInput";
 import { Select } from "@/components/forms/Select";
 import { SubmitButton } from "@/components/forms/SubmitButton";
 
@@ -20,6 +21,8 @@ export type ExerciseFormDefaults = {
   name?: string;
   muscle_group?: string;
   equipment?: string;
+  default_rest_seconds?: number | null;
+  is_bodyweight?: boolean;
   instructions?: string;
   notes?: string;
 };
@@ -86,6 +89,43 @@ export function ExerciseForm({
               <option key={e} value={e}>{e}</option>
             ))}
           </Select>
+        </FormField>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <FormField label="Default rest (sec)" htmlFor="default_rest_seconds" hint="90 if blank" error={errs?.default_rest_seconds?.[0]}>
+          <NumberInput
+            id="default_rest_seconds"
+            name="default_rest_seconds"
+            inputMode="numeric"
+            min={0}
+            step={5}
+            key={`rs-${submitted ? "s" : "i"}`}
+            defaultValue={
+              submitted?.default_rest_seconds ??
+              (defaults.default_rest_seconds != null
+                ? String(defaults.default_rest_seconds)
+                : "")
+            }
+            placeholder="90"
+          />
+        </FormField>
+        <FormField label="Bodyweight movement?">
+          <label className="flex min-h-11 items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              name="is_bodyweight"
+              defaultChecked={
+                submitted
+                  ? submitted.is_bodyweight === "on"
+                  : !!defaults.is_bodyweight
+              }
+              className="h-5 w-5"
+            />
+            <span className="text-zinc-700 dark:text-zinc-300">
+              Weight = added load
+            </span>
+          </label>
         </FormField>
       </div>
 
