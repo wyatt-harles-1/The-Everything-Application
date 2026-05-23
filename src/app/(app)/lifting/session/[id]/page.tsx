@@ -6,6 +6,10 @@
 import { notFound } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
+import {
+  computeMesoProgress,
+  formatMesoStatusShort,
+} from "@/lib/lifting/mesocycle";
 
 import { SessionClient, type SessionExercise } from "./SessionClient";
 
@@ -20,10 +24,32 @@ export default async function SessionPage({
   const { data: workout, error } = await supabase
     .schema("wellness")
     .from("workouts")
-    .select("id, started_at, ended_at, title, kind")
+    .select("id, started_at, ended_at, title, kind, mesocycle_id")
     .eq("id", id)
     .maybeSingle();
   if (error || !workout) notFound();
+
+  // If this session is part of a mesocycle, pull the meso row so the client
+  // header can show "Week 3 of 5" context.
+  let mesoBadge: { id: string; name: string; label: string } | null = null;
+  if (workout.mesocycle_id) {
+    const { data: meso } = await supabase
+      .schema("wellness")
+      .from("mesocycles")
+      .select(
+        "id, name, started_at, planned_weeks, deload_week_number, ended_at",
+      )
+      .eq("id", workout.mesocycle_id)
+      .maybeSingle();
+    if (meso) {
+      const progress = computeMesoProgress(meso);
+      mesoBadge = {
+        id: meso.id,
+        name: meso.name,
+        label: formatMesoStatusShort(progress, meso.planned_weeks),
+      };
+    }
+  }
 
   const { data: sets } = await supabase
     .schema("wellness")
@@ -167,6 +193,7 @@ export default async function SessionPage({
       startedAt={workout.started_at}
       endedAt={workout.ended_at}
       title={workout.title}
+      mesoBadge={mesoBadge}
       exercises={Array.from(grouped.values())}
       exerciseNames={exerciseNames}
     />

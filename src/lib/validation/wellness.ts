@@ -441,6 +441,31 @@ export const workoutTemplateSchema = z.object({
 export type WorkoutTemplateInput = z.infer<typeof workoutTemplateSchema>;
 
 
+// ============================================================================
+// MESOCYCLES (Phase 3 Wave 5c) - user-defined training blocks
+// ============================================================================
+
+export const mesocycleSchema = z.object({
+  name: z.string().trim().min(1, "Name is required"),
+  started_at: z.coerce.date(),
+  planned_weeks: z.coerce
+    .number()
+    .int()
+    .min(1, "Must be at least 1 week")
+    .max(26, "Max 26 weeks"),
+  // Optional 1-indexed week number that marks the deload week. Refined to
+  // be within planned_weeks at the action level since we need cross-field
+  // access.
+  deload_week_number: optionalInt.refine(
+    (v) => v === undefined || v >= 1,
+    "Deload week must be >= 1",
+  ),
+  notes: optionalText,
+});
+
+export type MesocycleInput = z.infer<typeof mesocycleSchema>;
+
+
 // Pre-populated quick-add markers shown as buttons on the form. Each click
 // drops a new result row with the name pre-filled. Order is intentional - the
 // most commonly-tracked-first.

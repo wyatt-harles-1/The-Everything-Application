@@ -6,6 +6,11 @@ import Link from "next/link";
 
 import { createClient } from "@/lib/supabase/server";
 import { formatDateTime } from "@/lib/format";
+import {
+  computeMesoProgress,
+  formatMesoStatusShort,
+  type MesocycleRow,
+} from "@/lib/lifting/mesocycle";
 
 export default async function LiftingHubPage() {
   const supabase = await createClient();
@@ -19,6 +24,19 @@ export default async function LiftingHubPage() {
     .eq("kind", "lifting")
     .order("started_at", { ascending: false })
     .limit(5);
+
+  // Active mesocycle (if any) - drives the "Week N of X" badge on this page
+  // and is what gym-mode sessions auto-tag against.
+  const { data: activeMesoRaw } = await supabase
+    .schema("wellness")
+    .from("mesocycles")
+    .select(
+      "id, name, started_at, planned_weeks, deload_week_number, ended_at",
+    )
+    .is("ended_at", null)
+    .maybeSingle();
+  const activeMeso = activeMesoRaw as MesocycleRow | null;
+  const mesoProgress = activeMeso ? computeMesoProgress(activeMeso) : null;
 
   const { count: exerciseCount } = await supabase
     .schema("wellness")
@@ -50,6 +68,29 @@ export default async function LiftingHubPage() {
           flow into the timeline at /log.
         </p>
       </header>
+
+      {activeMeso && mesoProgress ? (
+        <Link
+          href={`/lifting/mesocycles/${activeMeso.id}`}
+          className="block rounded-md border border-zinc-200 bg-zinc-50/50 px-3 py-2 transition-colors hover:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900/40 dark:hover:bg-zinc-900"
+        >
+          <p className="text-[10px] font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+            Active block
+          </p>
+          <div className="flex items-baseline justify-between gap-3">
+            <span className="text-sm font-semibold">{activeMeso.name}</span>
+            <span
+              className={`shrink-0 text-xs ${
+                mesoProgress.isDeloadWeek
+                  ? "text-amber-700 dark:text-amber-300"
+                  : "text-zinc-600 dark:text-zinc-300"
+              }`}
+            >
+              {formatMesoStatusShort(mesoProgress, activeMeso.planned_weeks)}
+            </span>
+          </div>
+        </Link>
+      ) : null}
 
       {inProgress ? (
         <Link
@@ -88,6 +129,15 @@ export default async function LiftingHubPage() {
           href="/lifting/templates"
           label="Templates"
           sublabel="plan & re-run"
+        />
+        <HubCard
+          href="/lifting/mesocycles"
+          label="Mesocycles"
+          sublabel={
+            activeMeso
+              ? "1 active"
+              : "training blocks"
+          }
         />
         <HubCard
           href="/lifting/dashboard"

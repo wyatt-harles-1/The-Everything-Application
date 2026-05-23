@@ -23,6 +23,16 @@ export async function startBlankSession(): Promise<void> {
   const ctx = await getUserContext();
   if (!ctx) redirect("/login");
 
+  // Auto-tag with the currently-active mesocycle if one exists. The partial
+  // unique index on (user_id) WHERE ended_at IS NULL guarantees at most one,
+  // so this is a single-row lookup.
+  const { data: activeMeso } = await ctx.supabase
+    .schema("wellness")
+    .from("mesocycles")
+    .select("id")
+    .is("ended_at", null)
+    .maybeSingle();
+
   const startedAt = new Date().toISOString();
   const { data: workout, error } = await ctx.supabase
     .schema("wellness")
@@ -33,6 +43,7 @@ export async function startBlankSession(): Promise<void> {
       started_at: startedAt,
       kind: "lifting",
       title: "Lifting session",
+      mesocycle_id: activeMeso?.id ?? null,
     })
     .select("id")
     .single();

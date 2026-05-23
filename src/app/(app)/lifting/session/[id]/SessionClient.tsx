@@ -95,6 +95,7 @@ export function SessionClient({
   startedAt,
   endedAt,
   title,
+  mesoBadge,
   exercises: initialExercises,
   exerciseNames,
 }: {
@@ -102,6 +103,7 @@ export function SessionClient({
   startedAt: string;
   endedAt: string | null;
   title: string | null;
+  mesoBadge: { id: string; name: string; label: string } | null;
   exercises: SessionExercise[];
   exerciseNames: string[];
 }) {
@@ -247,6 +249,15 @@ export function SessionClient({
               ← Lifting
             </Link>
             <h1 className="text-base font-semibold">{title ?? "Session"}</h1>
+            {mesoBadge ? (
+              <Link
+                href={`/lifting/mesocycles/${mesoBadge.id}`}
+                className="mt-0.5 inline-flex items-center gap-1 text-[11px] text-zinc-500 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-zinc-50"
+              >
+                <span className="font-medium">{mesoBadge.name}</span>
+                <span>· {mesoBadge.label}</span>
+              </Link>
+            ) : null}
           </div>
           <div className="text-right">
             <p className="text-xs uppercase tracking-wider text-zinc-500 dark:text-zinc-400">

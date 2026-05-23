@@ -234,6 +234,14 @@ export async function startSessionFromTemplate(templateId: string): Promise<void
     .maybeSingle();
   if (tErr || !template) redirect("/lifting/templates?flash=not_found");
 
+  // Auto-tag with the active mesocycle if one exists.
+  const { data: activeMeso } = await ctx.supabase
+    .schema("wellness")
+    .from("mesocycles")
+    .select("id")
+    .is("ended_at", null)
+    .maybeSingle();
+
   // Insert the workout row first to get a workout_id for the children.
   const startedAt = new Date().toISOString();
   const { data: workout, error: wErr } = await ctx.supabase
@@ -246,6 +254,7 @@ export async function startSessionFromTemplate(templateId: string): Promise<void
       kind: "lifting",
       title: template.name,
       notes: template.notes ?? null,
+      mesocycle_id: activeMeso?.id ?? null,
     })
     .select("id")
     .single();
