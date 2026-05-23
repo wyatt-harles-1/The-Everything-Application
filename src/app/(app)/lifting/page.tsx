@@ -68,6 +68,16 @@ export default async function LiftingHubPage() {
         </Link>
       ) : null}
 
+      {/* Big primary CTA - gym mode is the dominant action on this page. */}
+      {!inProgress ? (
+        <Link
+          href="/lifting/start"
+          className="block min-h-16 rounded-lg bg-zinc-950 px-4 py-4 text-center text-base font-medium text-white shadow-sm transition-colors hover:bg-zinc-800 dark:bg-zinc-50 dark:text-zinc-950 dark:hover:bg-zinc-200"
+        >
+          Start session →
+        </Link>
+      ) : null}
+
       <section className="grid grid-cols-2 gap-3">
         <HubCard
           href="/lifting/exercises"
@@ -75,19 +85,19 @@ export default async function LiftingHubPage() {
           sublabel={`${exerciseCount ?? 0} in library`}
         />
         <HubCard
-          href="/log/workout/new"
-          label="Log workout"
-          sublabel="manual / retroactive"
-        />
-        <HubCard
           href="/lifting/templates"
           label="Templates"
           sublabel="plan & re-run"
         />
         <HubCard
-          href="/lifting/start"
-          label="Start session"
-          sublabel="gym mode"
+          href="/lifting/dashboard"
+          label="Dashboard"
+          sublabel="volume + PRs"
+        />
+        <HubCard
+          href="/log/workout/new"
+          label="Log workout"
+          sublabel="manual / retroactive"
         />
       </section>
 

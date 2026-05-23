@@ -11,6 +11,7 @@ import { notFound } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
 import { formatDateTime } from "@/lib/format";
+import { Sparkline } from "@/components/Sparkline";
 
 import { ExerciseForm } from "../../ExerciseForm";
 import {
@@ -45,11 +46,27 @@ export default async function ExerciseDetailPage({
     .schema("wellness")
     .from("lifting_sets")
     .select(
-      "id, set_number, reps, weight_lbs, rpe, is_warmup, notes, workout_id, created_at, workouts:workout_id(id, started_at, title)",
+      "id, set_number, reps, weight_lbs, rpe, e1rm_lbs, is_warmup, notes, completed_at, workout_id, created_at, workouts:workout_id(id, started_at, title)",
     )
     .eq("exercise_id", id)
     .order("created_at", { ascending: false })
-    .limit(100);
+    .limit(200);
+
+  // PR is the highest e1RM ever logged on a completed set for this exercise.
+  const maxE1rm = (sets ?? [])
+    .filter((s) => s.completed_at !== null && s.e1rm_lbs != null)
+    .reduce((max, s) => Math.max(max, Number(s.e1rm_lbs)), 0);
+
+  // For the e1RM sparkline: completed sets in chronological order with a
+  // non-null e1rm.
+  const e1rmSeries = (sets ?? [])
+    .filter((s) => s.completed_at !== null && s.e1rm_lbs != null)
+    .map((s) => ({
+      e1rm: Number(s.e1rm_lbs),
+      ts: new Date(s.completed_at!).getTime(),
+    }))
+    .sort((a, b) => a.ts - b.ts)
+    .map((p) => p.e1rm);
 
   return (
     <div className="space-y-8">
@@ -119,6 +136,27 @@ export default async function ExerciseDetailPage({
         </form>
       </div>
 
+      {/* e1RM trend chart - lit only when we have at least one completed set
+          with weight+reps. The Sparkline draws values evenly spaced. */}
+      {e1rmSeries.length > 0 ? (
+        <section className="space-y-2">
+          <div className="flex items-baseline justify-between">
+            <h2 className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
+              e1RM trend
+            </h2>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+              best: <span className="font-medium text-zinc-950 dark:text-zinc-50">{maxE1rm.toFixed(1)} lbs</span>
+            </p>
+          </div>
+          <div className="rounded-lg border border-zinc-200 p-3 text-zinc-700 dark:border-zinc-800 dark:text-zinc-300">
+            <Sparkline values={e1rmSeries} />
+            <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
+              {e1rmSeries.length} completed sets · Epley formula
+            </p>
+          </div>
+        </section>
+      ) : null}
+
       <section className="space-y-3">
         <h2 className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
           History
@@ -145,6 +183,13 @@ export default async function ExerciseDetailPage({
               const workout: WorkoutShape | null = Array.isArray(raw)
                 ? raw[0] ?? null
                 : raw;
+              // A set is a PR if it's the current top-e1RM completed set.
+              // Ties are fine - multiple equal-best sets all get the badge.
+              const isPR =
+                s.completed_at !== null &&
+                s.e1rm_lbs != null &&
+                Number(s.e1rm_lbs) === maxE1rm &&
+                maxE1rm > 0;
               return (
                 <li key={s.id}>
                   <Link
@@ -154,6 +199,11 @@ export default async function ExerciseDetailPage({
                     <div className="flex items-baseline justify-between gap-3">
                       <span className="text-sm font-medium">
                         Set {s.set_number}
+                        {isPR ? (
+                          <span className="ml-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-900 dark:bg-amber-900/60 dark:text-amber-100">
+                            🏆 PR
+                          </span>
+                        ) : null}
                         {s.is_warmup ? " (warmup)" : ""}
                       </span>
                       {workout ? (
@@ -167,6 +217,9 @@ export default async function ExerciseDetailPage({
                         s.reps != null ? `${s.reps} reps` : null,
                         s.weight_lbs != null ? `${s.weight_lbs} lbs` : null,
                         s.rpe != null ? `RPE ${s.rpe}` : null,
+                        s.e1rm_lbs != null
+                          ? `e1RM ${Number(s.e1rm_lbs).toFixed(1)}`
+                          : null,
                       ]
                         .filter(Boolean)
                         .join(" · ") || "—"}

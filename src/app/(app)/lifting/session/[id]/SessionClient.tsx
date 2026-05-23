@@ -31,8 +31,13 @@ export type SessionSet = {
   reps: number | null;
   weightLbs: number | null;
   rpe: number | null;
+  e1rmLbs: number | null;
   isWarmup: boolean;
   completedAt: string | null;
+  // True when this set's e1RM ties or beats the user's all-time best for
+  // the exercise. Computed server-side at render; optimistic UI in this
+  // file doesn't try to recompute - the next router.refresh() picks it up.
+  isPR: boolean;
 };
 
 export type SessionExercise = {
@@ -165,8 +170,10 @@ export function SessionClient({
                   reps: lastSet?.reps ?? null,
                   weightLbs: lastSet?.weightLbs ?? null,
                   rpe: null,
+                  e1rmLbs: null,
                   isWarmup: false,
                   completedAt: null,
+                  isPR: false,
                 },
               ],
             }
@@ -420,6 +427,11 @@ function SetRow({
     >
       <span className="w-12 shrink-0 text-xs font-medium text-zinc-500 dark:text-zinc-400">
         {set.isWarmup ? "W" : set.setNumber}
+        {set.isPR ? (
+          <span className="ml-0.5 text-amber-600 dark:text-amber-300" aria-label="personal record">
+            🏆
+          </span>
+        ) : null}
       </span>
       <input
         type="number"
