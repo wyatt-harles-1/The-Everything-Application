@@ -11,6 +11,7 @@ import {
   describeRule,
   type RecurrenceRule,
 } from "@/lib/scheduler/recurrence";
+import { computeHabitProgress } from "@/lib/scheduler/streak";
 
 type ScheduledRow = {
   id: string;
@@ -113,6 +114,36 @@ export default async function SchedulePage({
     .order("created_at", { ascending: false });
   const templates = (templateRows ?? []) as TemplateRow[];
 
+  // Active habits panel: pull active habits + recent events, compute
+  // progress per habit. 60 days is enough for streaks up to ~8 weeks.
+  const { data: habitRows } = await supabase
+    .schema("shared")
+    .from("habits")
+    .select(
+      "id, name, domain, event_type, target_frequency_per_week, started_at",
+    )
+    .eq("active", true)
+    .order("started_at", { ascending: false });
+  const habits = (habitRows ?? []) as {
+    id: string;
+    name: string;
+    domain: string;
+    event_type: string | null;
+    target_frequency_per_week: number;
+    started_at: string;
+  }[];
+
+  const sixtyDaysAgo = new Date();
+  sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+  const { data: habitEvents } = habits.length > 0
+    ? await supabase
+        .schema("shared")
+        .from("events")
+        .select("domain, event_type, occurred_at")
+        .gte("occurred_at", sixtyDaysAgo.toISOString())
+        .order("occurred_at", { ascending: true })
+    : { data: [] };
+
   return (
     <div className="space-y-6">
       <header className="space-y-1">
@@ -139,6 +170,74 @@ export default async function SchedulePage({
       >
         + Add to schedule
       </Link>
+
+      {habits.length > 0 ? (
+        <section className="space-y-2">
+          <div className="flex items-baseline justify-between">
+            <h2 className="text-xs font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+              Habits
+            </h2>
+            <Link
+              href="/habits"
+              className="text-xs text-zinc-500 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-zinc-50"
+            >
+              manage →
+            </Link>
+          </div>
+          <ul className="space-y-1.5">
+            {habits.map((h) => {
+              const matching = (habitEvents ?? []).filter(
+                (e) =>
+                  e.domain === h.domain &&
+                  (h.event_type === null || e.event_type === h.event_type),
+              );
+              const progress = computeHabitProgress(
+                matching,
+                h.target_frequency_per_week,
+                new Date(h.started_at + "T00:00:00"),
+              );
+              const pct = Math.min(
+                100,
+                Math.round((progress.thisWeekCount / progress.target) * 100),
+              );
+              return (
+                <li key={h.id}>
+                  <Link
+                    href={`/habits/${h.id}`}
+                    className="block rounded-md border border-zinc-200 p-3 transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900"
+                  >
+                    <div className="flex items-baseline justify-between gap-3">
+                      <span className="text-sm font-medium">
+                        {h.name}
+                        {progress.streakWeeks > 0 ? (
+                          <span className="ml-1.5 text-[11px] text-amber-600 dark:text-amber-300">
+                            🔥{progress.streakWeeks}
+                          </span>
+                        ) : null}
+                      </span>
+                      <span className="shrink-0 text-xs tabular-nums text-zinc-500 dark:text-zinc-400">
+                        {progress.thisWeekCount}/{progress.target}
+                      </span>
+                    </div>
+                    <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+                      <div
+                        className={`h-full ${
+                          progress.thisWeekMet
+                            ? "bg-emerald-500"
+                            : progress.isStreakAlive
+                              ? "bg-zinc-700 dark:bg-zinc-300"
+                              : "bg-amber-400 dark:bg-amber-500"
+                        }`}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ) : null}
 
       {templates.length > 0 ? (
         <section className="space-y-2">
