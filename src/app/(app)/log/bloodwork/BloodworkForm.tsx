@@ -76,6 +76,15 @@ export function BloodworkForm({
       : [],
   );
 
+  // Default the draw date to today (local time) on the new-panel page.
+  // Edit pages pass defaults.drawn_at; this only kicks in if that's empty.
+  const todayLocal = (() => {
+    const d = new Date();
+    const pad = (n: number) => n.toString().padStart(2, "0");
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  })();
+  const initialDrawnAt = pick("drawn_at", defaults.drawn_at) || todayLocal;
+
   function updateResult(i: number, patch: Partial<ResultDraft>) {
     setResults((prev) => prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
   }
@@ -102,7 +111,7 @@ export function BloodworkForm({
           name="drawn_at"
           required
           key={`drawn_at-${submitted ? "s" : "i"}`}
-          defaultValue={pick("drawn_at", defaults.drawn_at)}
+          defaultValue={initialDrawnAt}
         />
       </FormField>
 

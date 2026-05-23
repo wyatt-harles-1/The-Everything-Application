@@ -30,10 +30,17 @@ export function FormField({
         <span>
           {label}
           {required ? (
-            <span className="ml-0.5 text-red-600 dark:text-red-400" aria-hidden>
+            <span
+              className="ml-1 text-base font-bold text-red-600 dark:text-red-400"
+              aria-label="required"
+            >
               *
             </span>
-          ) : null}
+          ) : (
+            <span className="ml-1.5 text-xs font-normal text-zinc-400 dark:text-zinc-500">
+              optional
+            </span>
+          )}
         </span>
         {hint ? (
           <span className="text-xs font-normal text-zinc-500 dark:text-zinc-400">
