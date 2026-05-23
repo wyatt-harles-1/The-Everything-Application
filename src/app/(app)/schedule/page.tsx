@@ -1,11 +1,16 @@
-// /schedule - list of planned scheduled_events grouped by section (today,
-// tomorrow, this week, later, past). One-off events only in 4a1; recurrence
-// + calendar view land in 4a2.
+// /schedule - day-grouped agenda of planned events plus a "Recurring
+// schedules" section showing series templates. Day-grouped (one section
+// per calendar day) replaces the earlier Today/Tomorrow/This-week/Later
+// buckets - more useful once recurrence pre-fills weeks of events.
 
 import Link from "next/link";
 
 import { createClient } from "@/lib/supabase/server";
-import { formatDateTime } from "@/lib/format";
+import { formatTime, formatDate } from "@/lib/format";
+import {
+  describeRule,
+  type RecurrenceRule,
+} from "@/lib/scheduler/recurrence";
 
 type ScheduledRow = {
   id: string;
@@ -15,11 +20,16 @@ type ScheduledRow = {
   title: string;
   notes: string | null;
   status: "planned" | "done" | "skipped" | "missed";
+  parent_scheduled_id: string | null;
 };
 
-type Section = {
-  label: string;
-  events: ScheduledRow[];
+type TemplateRow = {
+  id: string;
+  domain: string;
+  event_type: string;
+  scheduled_for: string;
+  title: string;
+  recurrence_rule: RecurrenceRule;
 };
 
 function startOfDay(d: Date): Date {
@@ -28,37 +38,38 @@ function startOfDay(d: Date): Date {
   return out;
 }
 
-function groupByDate(events: ScheduledRow[]): Section[] {
-  const now = new Date();
-  const today = startOfDay(now);
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  const endOfThisWeek = new Date(today);
-  endOfThisWeek.setDate(endOfThisWeek.getDate() + 7);
+// Day label like "Today · Sat May 24" so the user can both pattern-match
+// (Today / Tomorrow) and see the date.
+function dayLabel(d: Date): string {
+  const now = startOfDay(new Date());
+  const day = startOfDay(d);
+  const diffDays = Math.round(
+    (day.getTime() - now.getTime()) / (1000 * 60 * 60 * 24),
+  );
+  const prefix =
+    diffDays === 0
+      ? "Today"
+      : diffDays === 1
+        ? "Tomorrow"
+        : diffDays === -1
+          ? "Yesterday"
+          : null;
+  const base = day.toLocaleDateString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
+  return prefix ? `${prefix} · ${base}` : base;
+}
 
-  const past: ScheduledRow[] = [];
-  const todays: ScheduledRow[] = [];
-  const tomorrows: ScheduledRow[] = [];
-  const thisWeek: ScheduledRow[] = [];
-  const later: ScheduledRow[] = [];
-
+function groupByDay(events: ScheduledRow[]): Map<number, ScheduledRow[]> {
+  const map = new Map<number, ScheduledRow[]>();
   for (const e of events) {
-    const when = new Date(e.scheduled_for);
-    if (when < today) past.push(e);
-    else if (when < tomorrow) todays.push(e);
-    else if (when < new Date(tomorrow.getTime() + 24 * 60 * 60 * 1000))
-      tomorrows.push(e);
-    else if (when < endOfThisWeek) thisWeek.push(e);
-    else later.push(e);
+    const key = startOfDay(new Date(e.scheduled_for)).getTime();
+    if (!map.has(key)) map.set(key, []);
+    map.get(key)!.push(e);
   }
-
-  return [
-    { label: "Today", events: todays },
-    { label: "Tomorrow", events: tomorrows },
-    { label: "This week", events: thisWeek },
-    { label: "Later", events: later },
-    { label: "Past (still planned)", events: past },
-  ].filter((s) => s.events.length > 0);
+  return map;
 }
 
 export default async function SchedulePage({
@@ -69,19 +80,38 @@ export default async function SchedulePage({
   const { flash } = await searchParams;
   const supabase = await createClient();
 
-  // Upcoming + recent planned events. Done/skipped land elsewhere via the
-  // detail page; the schedule list focuses on what's still on the agenda.
+  // Agenda query: planned items that are NOT series templates. Includes
+  // both one-offs and materialized recurrence instances - they look the
+  // same to the user.
   const { data: rows } = await supabase
     .schema("shared")
     .from("scheduled_events")
     .select(
-      "id, domain, event_type, scheduled_for, title, notes, status",
+      "id, domain, event_type, scheduled_for, title, notes, status, parent_scheduled_id, recurrence_rule",
     )
     .eq("status", "planned")
+    .is("recurrence_rule", null)
     .order("scheduled_for", { ascending: true });
 
-  const events = (rows ?? []) as ScheduledRow[];
-  const sections = groupByDate(events);
+  const events = (rows ?? []) as (ScheduledRow & {
+    recurrence_rule: unknown;
+  })[];
+  const grouped = groupByDay(events);
+  const sortedDays = Array.from(grouped.keys()).sort();
+
+  // Recurring schedules: rows that ARE templates (have a recurrence_rule
+  // and no parent). Surface them as their own short list so the user can
+  // jump to manage the series.
+  const { data: templateRows } = await supabase
+    .schema("shared")
+    .from("scheduled_events")
+    .select(
+      "id, domain, event_type, scheduled_for, title, recurrence_rule",
+    )
+    .not("recurrence_rule", "is", null)
+    .is("parent_scheduled_id", null)
+    .order("created_at", { ascending: false });
+  const templates = (templateRows ?? []) as TemplateRow[];
 
   return (
     <div className="space-y-6">
@@ -110,38 +140,81 @@ export default async function SchedulePage({
         + Add to schedule
       </Link>
 
-      {sections.length === 0 ? (
+      {templates.length > 0 ? (
+        <section className="space-y-2">
+          <h2 className="text-xs font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+            Recurring schedules
+          </h2>
+          <ul className="space-y-1.5">
+            {templates.map((t) => (
+              <li key={t.id}>
+                <Link
+                  href={`/schedule/${t.id}`}
+                  className="block rounded-md border border-zinc-200 p-3 transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900"
+                >
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="text-sm font-medium">{t.title}</span>
+                    <span className="shrink-0 text-xs text-zinc-500 dark:text-zinc-400">
+                      {describeRule(t.recurrence_rule)} ·{" "}
+                      {formatTime(t.scheduled_for)}
+                    </span>
+                  </div>
+                  <p className="mt-0.5 text-[11px] uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                    {t.domain} · {t.event_type} · started{" "}
+                    {formatDate(t.scheduled_for)}
+                  </p>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      {sortedDays.length === 0 ? (
         <p className="rounded-lg border border-dashed border-zinc-300 p-4 text-sm text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">
           Nothing on the schedule yet. Add the first thing above.
         </p>
       ) : (
-        sections.map((s) => (
-          <section key={s.label} className="space-y-2">
-            <h2 className="text-xs font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-              {s.label}
-            </h2>
-            <ul className="space-y-1.5">
-              {s.events.map((e) => (
-                <li key={e.id}>
-                  <Link
-                    href={`/schedule/${e.id}`}
-                    className="block rounded-md border border-zinc-200 p-3 transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900"
-                  >
-                    <div className="flex items-baseline justify-between gap-3">
-                      <span className="text-sm font-medium">{e.title}</span>
-                      <span className="shrink-0 text-xs text-zinc-500 dark:text-zinc-400">
-                        {formatDateTime(e.scheduled_for)}
-                      </span>
-                    </div>
-                    <p className="mt-0.5 text-[11px] uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-                      {e.domain} · {e.event_type}
-                    </p>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </section>
-        ))
+        sortedDays.map((dayKey) => {
+          const dayEvents = grouped.get(dayKey)!;
+          return (
+            <section key={dayKey} className="space-y-2">
+              <h2 className="text-xs font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                {dayLabel(new Date(dayKey))}
+              </h2>
+              <ul className="space-y-1.5">
+                {dayEvents.map((e) => (
+                  <li key={e.id}>
+                    <Link
+                      href={`/schedule/${e.id}`}
+                      className="block rounded-md border border-zinc-200 p-3 transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900"
+                    >
+                      <div className="flex items-baseline justify-between gap-3">
+                        <span className="text-sm font-medium">
+                          {e.title}
+                          {e.parent_scheduled_id ? (
+                            <span
+                              className="ml-1.5 text-[10px] uppercase tracking-wider text-zinc-500 dark:text-zinc-400"
+                              aria-label="part of a recurring series"
+                            >
+                              ↻
+                            </span>
+                          ) : null}
+                        </span>
+                        <span className="shrink-0 text-xs tabular-nums text-zinc-500 dark:text-zinc-400">
+                          {formatTime(e.scheduled_for)}
+                        </span>
+                      </div>
+                      <p className="mt-0.5 text-[11px] uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+                        {e.domain} · {e.event_type}
+                      </p>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          );
+        })
       )}
     </div>
   );

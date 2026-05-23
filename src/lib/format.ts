@@ -30,6 +30,13 @@ export function formatDate(iso: string | Date): string {
   return d.toLocaleDateString(undefined, { dateStyle: "medium" });
 }
 
+// "5:00 PM" / "9:30 AM" - just the clock part, used in the day-grouped
+// agenda where the date is already in the section header.
+export function formatTime(iso: string | Date): string {
+  const d = typeof iso === "string" ? new Date(iso) : iso;
+  return d.toLocaleTimeString(undefined, { timeStyle: "short" });
+}
+
 // "8h 12m" / "1h 5m" / "23m" - for showing a duration computed from two
 // timestamps without dragging in a date library.
 export function formatDuration(minutes: number): string {

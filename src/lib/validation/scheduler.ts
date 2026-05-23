@@ -34,12 +34,35 @@ export const scheduledEventTypes = [
   "other",
 ] as const;
 
+export const recurrenceFreqs = ["daily", "weekly", "monthly"] as const;
+
+// JSON shape persisted on shared.scheduled_events.recurrence_rule. The
+// action layer reshapes flat FormData ("repeats"=on + "recurrence_freq" +
+// "recurrence_days" + "recurrence_until") into this object before calling
+// scheduledEventSchema.safeParse.
+export const recurrenceRuleSchema = z.object({
+  freq: z.enum(recurrenceFreqs),
+  // 1=Mon, 7=Sun. Weekly-only; ignored otherwise.
+  days: z
+    .array(z.coerce.number().int().min(1).max(7))
+    .min(1)
+    .optional(),
+  // Optional end date for the series. "YYYY-MM-DD".
+  until: z.preprocess(
+    (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+    z.string().optional(),
+  ),
+});
+
+export type RecurrenceRuleInput = z.infer<typeof recurrenceRuleSchema>;
+
 export const scheduledEventSchema = z.object({
   domain: z.enum(scheduledEventDomains),
   event_type: z.enum(scheduledEventTypes),
   scheduled_for: z.coerce.date(),
   title: z.string().trim().min(1, "Title is required"),
   notes: optionalText,
+  recurrence_rule: recurrenceRuleSchema.optional(),
 });
 
 export type ScheduledEventInput = z.infer<typeof scheduledEventSchema>;
