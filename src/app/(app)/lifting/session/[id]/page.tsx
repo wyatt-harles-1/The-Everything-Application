@@ -48,6 +48,7 @@ export default async function SessionPage({
         name: s.exercise_name ?? "Unnamed",
         defaultRestSeconds: null,
         isBodyweight: false,
+        equipment: null,
         lastPerformance: null,
         sets: [],
       });
@@ -77,7 +78,7 @@ export default async function SessionPage({
     const { data: meta } = await supabase
       .schema("wellness")
       .from("exercises")
-      .select("id, default_rest_seconds, is_bodyweight")
+      .select("id, default_rest_seconds, is_bodyweight, equipment")
       .in("id", exerciseIds);
     const metaById = new Map(
       (meta ?? []).map((m) => [
@@ -85,6 +86,7 @@ export default async function SessionPage({
         {
           defaultRestSeconds: m.default_rest_seconds as number | null,
           isBodyweight: !!m.is_bodyweight,
+          equipment: (m.equipment as string | null) ?? null,
         },
       ]),
     );
@@ -94,6 +96,7 @@ export default async function SessionPage({
       if (m) {
         ex.defaultRestSeconds = m.defaultRestSeconds;
         ex.isBodyweight = m.isBodyweight;
+        ex.equipment = m.equipment;
       }
     }
   }

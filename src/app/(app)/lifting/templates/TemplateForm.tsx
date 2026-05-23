@@ -12,6 +12,25 @@
 
 import { useActionState, useState } from "react";
 
+import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  TouchSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+
 import { FormField } from "@/components/forms/FormField";
 import { TextInput } from "@/components/forms/TextInput";
 import { TextArea } from "@/components/forms/TextArea";
@@ -33,11 +52,25 @@ export type PlannedSetDraft = {
 };
 
 export type TemplateExerciseDraft = {
+  // Stable client-only id used to key the dnd-kit SortableContext. Not
+  // persisted - regenerated each render mount, so hydrating defaults must
+  // mint one too (see makeDndId below).
+  dndId?: string;
   exercise_name: string;
   rest_seconds: string;
   notes: string;
   planned_sets: PlannedSetDraft[];
 };
+
+// Stable id generator for dnd-kit. crypto.randomUUID is available in
+// modern browsers + Node; we never persist these ids, they're scoped to a
+// single form mount.
+function makeDndId(): string {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+  return `dnd-${Math.random().toString(36).slice(2)}-${Date.now()}`;
+}
 
 export type TemplateFormDefaults = {
   name?: string;
@@ -59,6 +92,7 @@ function emptySet(): PlannedSetDraft {
 }
 function emptyExercise(): TemplateExerciseDraft {
   return {
+    dndId: makeDndId(),
     exercise_name: "",
     rest_seconds: "",
     notes: "",
@@ -83,11 +117,35 @@ export function TemplateForm({
   const [name, setName] = useState(defaults.name ?? "");
   const [description, setDescription] = useState(defaults.description ?? "");
   const [notes, setNotes] = useState(defaults.notes ?? "");
-  const [exercises, setExercises] = useState<TemplateExerciseDraft[]>(
-    defaults.exercises && defaults.exercises.length > 0
-      ? defaults.exercises
-      : [emptyExercise()],
+  // Ensure every exercise has a dndId. Server-hydrated defaults arrive
+  // without one (the field isn't persisted), so mint here on first render.
+  const [exercises, setExercises] = useState<TemplateExerciseDraft[]>(() => {
+    const seed =
+      defaults.exercises && defaults.exercises.length > 0
+        ? defaults.exercises
+        : [emptyExercise()];
+    return seed.map((e) => (e.dndId ? e : { ...e, dndId: makeDndId() }));
+  });
+
+  // dnd-kit sensors. PointerSensor for mouse, TouchSensor for mobile, and
+  // KeyboardSensor for accessibility. Activation distance prevents drag
+  // from triggering on stray clicks inside input fields.
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
+
+  function onDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    setExercises((prev) => {
+      const oldIndex = prev.findIndex((e) => e.dndId === active.id);
+      const newIndex = prev.findIndex((e) => e.dndId === over.id);
+      if (oldIndex === -1 || newIndex === -1) return prev;
+      return arrayMove(prev, oldIndex, newIndex);
+    });
+  }
 
   function updateExercise(idx: number, patch: Partial<TemplateExerciseDraft>) {
     setExercises((prev) => prev.map((e, i) => (i === idx ? { ...e, ...patch } : e)));
@@ -97,15 +155,6 @@ export function TemplateForm({
   }
   function removeExercise(idx: number) {
     setExercises((prev) => prev.filter((_, i) => i !== idx));
-  }
-  function moveExercise(idx: number, dir: -1 | 1) {
-    setExercises((prev) => {
-      const j = idx + dir;
-      if (j < 0 || j >= prev.length) return prev;
-      const next = [...prev];
-      [next[idx], next[j]] = [next[j], next[idx]];
-      return next;
-    });
   }
   function updateSet(eIdx: number, sIdx: number, patch: Partial<PlannedSetDraft>) {
     setExercises((prev) =>
@@ -195,164 +244,30 @@ export function TemplateForm({
       <fieldset className="space-y-3">
         <legend className="text-sm font-medium">Exercises</legend>
 
-        {exercises.map((ex, eIdx) => (
-          <div
-            key={eIdx}
-            className="space-y-3 rounded-lg border border-zinc-200 p-3 dark:border-zinc-800"
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={onDragEnd}
+        >
+          <SortableContext
+            items={exercises.map((e) => e.dndId ?? "")}
+            strategy={verticalListSortingStrategy}
           >
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-                Exercise {eIdx + 1}
-              </span>
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => moveExercise(eIdx, -1)}
-                  disabled={eIdx === 0}
-                  aria-label="Move up"
-                  className="h-8 w-8 rounded text-zinc-500 hover:bg-zinc-100 disabled:opacity-30 dark:hover:bg-zinc-800"
-                >
-                  ↑
-                </button>
-                <button
-                  type="button"
-                  onClick={() => moveExercise(eIdx, 1)}
-                  disabled={eIdx === exercises.length - 1}
-                  aria-label="Move down"
-                  className="h-8 w-8 rounded text-zinc-500 hover:bg-zinc-100 disabled:opacity-30 dark:hover:bg-zinc-800"
-                >
-                  ↓
-                </button>
-                <button
-                  type="button"
-                  onClick={() => removeExercise(eIdx)}
-                  className="ml-1 px-2 text-xs text-red-600 hover:text-red-700 dark:text-red-400"
-                  aria-label="Remove exercise"
-                >
-                  Remove
-                </button>
-              </div>
-            </div>
-
-            <FormField label="Exercise">
-              <TextInput
-                value={ex.exercise_name}
-                onChange={(e) => updateExercise(eIdx, { exercise_name: e.target.value })}
-                placeholder="Back Squat"
-                list="exercise-library-names"
-                autoCapitalize="words"
+            {exercises.map((ex, eIdx) => (
+              <SortableExerciseCard
+                key={ex.dndId}
+                id={ex.dndId ?? `e-${eIdx}`}
+                exercise={ex}
+                index={eIdx}
+                onUpdateExercise={(patch) => updateExercise(eIdx, patch)}
+                onRemoveExercise={() => removeExercise(eIdx)}
+                onUpdateSet={(sIdx, patch) => updateSet(eIdx, sIdx, patch)}
+                onAddSet={() => addSet(eIdx)}
+                onRemoveSet={(sIdx) => removeSet(eIdx, sIdx)}
               />
-            </FormField>
-
-            <div className="grid grid-cols-2 gap-3">
-              <FormField label="Rest (sec)">
-                <NumberInput
-                  inputMode="numeric"
-                  min={0}
-                  step={5}
-                  value={ex.rest_seconds}
-                  onChange={(e) => updateExercise(eIdx, { rest_seconds: e.target.value })}
-                  placeholder="120"
-                />
-              </FormField>
-              <FormField label="Notes">
-                <TextInput
-                  value={ex.notes}
-                  onChange={(e) => updateExercise(eIdx, { notes: e.target.value })}
-                  placeholder="Optional"
-                />
-              </FormField>
-            </div>
-
-            <div className="space-y-2">
-              <p className="text-xs font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-                Planned sets
-              </p>
-              {ex.planned_sets.map((s, sIdx) => (
-                <div
-                  key={sIdx}
-                  className="space-y-2 rounded-md border border-zinc-200 bg-zinc-50/40 p-2.5 dark:border-zinc-800 dark:bg-zinc-900/40"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium text-zinc-600 dark:text-zinc-300">
-                      Set {sIdx + 1}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => removeSet(eIdx, sIdx)}
-                      className="text-xs text-red-600 hover:text-red-700 dark:text-red-400"
-                      aria-label={`Remove set ${sIdx + 1}`}
-                    >
-                      ×
-                    </button>
-                  </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    <FormField label="Reps">
-                      <NumberInput
-                        inputMode="numeric"
-                        min={0}
-                        step={1}
-                        value={s.reps}
-                        onChange={(e) => updateSet(eIdx, sIdx, { reps: e.target.value })}
-                      />
-                    </FormField>
-                    <FormField label="Weight">
-                      <NumberInput
-                        min={0}
-                        step="2.5"
-                        value={s.weight_lbs}
-                        onChange={(e) => updateSet(eIdx, sIdx, { weight_lbs: e.target.value })}
-                      />
-                    </FormField>
-                    <FormField label="RPE">
-                      <NumberInput
-                        min={1}
-                        max={10}
-                        step="0.5"
-                        value={s.rpe}
-                        onChange={(e) => updateSet(eIdx, sIdx, { rpe: e.target.value })}
-                      />
-                    </FormField>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <FormField label="Tempo" hint="e.g. 3-1-1-0">
-                      <TextInput
-                        value={s.tempo}
-                        onChange={(e) => updateSet(eIdx, sIdx, { tempo: e.target.value })}
-                        placeholder="3-1-1-0"
-                      />
-                    </FormField>
-                    <FormField label="RIR" hint="reps in reserve, 0-10">
-                      <NumberInput
-                        min={0}
-                        max={10}
-                        step="0.5"
-                        value={s.rir}
-                        onChange={(e) => updateSet(eIdx, sIdx, { rir: e.target.value })}
-                      />
-                    </FormField>
-                  </div>
-                  <label className="flex items-center gap-2 text-xs">
-                    <input
-                      type="checkbox"
-                      checked={s.is_warmup}
-                      onChange={(e) => updateSet(eIdx, sIdx, { is_warmup: e.target.checked })}
-                      className="h-4 w-4"
-                    />
-                    Warmup
-                  </label>
-                </div>
-              ))}
-              <button
-                type="button"
-                onClick={() => addSet(eIdx)}
-                className="min-h-9 w-full rounded-md border border-dashed border-zinc-300 px-3 py-1.5 text-xs text-zinc-600 hover:border-zinc-400 hover:text-zinc-950 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-zinc-500 dark:hover:text-zinc-50"
-              >
-                + Add set (copies last)
-              </button>
-            </div>
-          </div>
-        ))}
+            ))}
+          </SortableContext>
+        </DndContext>
 
         <button
           type="button"
@@ -385,5 +300,198 @@ export function TemplateForm({
 
       <SubmitButton>{submitLabel}</SubmitButton>
     </form>
+  );
+}
+
+// One sortable exercise card. dnd-kit's useSortable hook returns refs,
+// transform CSS, and listeners that we attach to a dedicated drag handle
+// (not the whole card - tapping inputs shouldn't start a drag).
+function SortableExerciseCard({
+  id,
+  exercise,
+  index,
+  onUpdateExercise,
+  onRemoveExercise,
+  onUpdateSet,
+  onAddSet,
+  onRemoveSet,
+}: {
+  id: string;
+  exercise: TemplateExerciseDraft;
+  index: number;
+  onUpdateExercise: (patch: Partial<TemplateExerciseDraft>) => void;
+  onRemoveExercise: () => void;
+  onUpdateSet: (sIdx: number, patch: Partial<PlannedSetDraft>) => void;
+  onAddSet: () => void;
+  onRemoveSet: (sIdx: number) => void;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id });
+
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.6 : 1,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`space-y-3 rounded-lg border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950 ${
+        isDragging ? "ring-2 ring-zinc-400 dark:ring-zinc-600" : ""
+      }`}
+    >
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          {/* Drag handle. Listeners + attributes only attach here so taps
+              inside the form fields below never start a drag. */}
+          <button
+            type="button"
+            {...attributes}
+            {...listeners}
+            aria-label="Drag to reorder exercise"
+            className="flex h-8 w-8 cursor-grab touch-none items-center justify-center rounded text-zinc-400 hover:bg-zinc-100 hover:text-zinc-950 active:cursor-grabbing dark:hover:bg-zinc-800 dark:hover:text-zinc-50"
+          >
+            ⋮⋮
+          </button>
+          <span className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+            Exercise {index + 1}
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={onRemoveExercise}
+          className="px-2 text-xs text-red-600 hover:text-red-700 dark:text-red-400"
+          aria-label="Remove exercise"
+        >
+          Remove
+        </button>
+      </div>
+
+      <FormField label="Exercise">
+        <TextInput
+          value={exercise.exercise_name}
+          onChange={(e) => onUpdateExercise({ exercise_name: e.target.value })}
+          placeholder="Back Squat"
+          list="exercise-library-names"
+          autoCapitalize="words"
+        />
+      </FormField>
+
+      <div className="grid grid-cols-2 gap-3">
+        <FormField label="Rest (sec)">
+          <NumberInput
+            inputMode="numeric"
+            min={0}
+            step={5}
+            value={exercise.rest_seconds}
+            onChange={(e) => onUpdateExercise({ rest_seconds: e.target.value })}
+            placeholder="120"
+          />
+        </FormField>
+        <FormField label="Notes">
+          <TextInput
+            value={exercise.notes}
+            onChange={(e) => onUpdateExercise({ notes: e.target.value })}
+            placeholder="Optional"
+          />
+        </FormField>
+      </div>
+
+      <div className="space-y-2">
+        <p className="text-xs font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+          Planned sets
+        </p>
+        {exercise.planned_sets.map((s, sIdx) => (
+          <div
+            key={sIdx}
+            className="space-y-2 rounded-md border border-zinc-200 bg-zinc-50/40 p-2.5 dark:border-zinc-800 dark:bg-zinc-900/40"
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-zinc-600 dark:text-zinc-300">
+                Set {sIdx + 1}
+              </span>
+              <button
+                type="button"
+                onClick={() => onRemoveSet(sIdx)}
+                className="text-xs text-red-600 hover:text-red-700 dark:text-red-400"
+                aria-label={`Remove set ${sIdx + 1}`}
+              >
+                ×
+              </button>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <FormField label="Reps">
+                <NumberInput
+                  inputMode="numeric"
+                  min={0}
+                  step={1}
+                  value={s.reps}
+                  onChange={(e) => onUpdateSet(sIdx, { reps: e.target.value })}
+                />
+              </FormField>
+              <FormField label="Weight">
+                <NumberInput
+                  min={0}
+                  step="2.5"
+                  value={s.weight_lbs}
+                  onChange={(e) => onUpdateSet(sIdx, { weight_lbs: e.target.value })}
+                />
+              </FormField>
+              <FormField label="RPE">
+                <NumberInput
+                  min={1}
+                  max={10}
+                  step="0.5"
+                  value={s.rpe}
+                  onChange={(e) => onUpdateSet(sIdx, { rpe: e.target.value })}
+                />
+              </FormField>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <FormField label="Tempo" hint="e.g. 3-1-1-0">
+                <TextInput
+                  value={s.tempo}
+                  onChange={(e) => onUpdateSet(sIdx, { tempo: e.target.value })}
+                  placeholder="3-1-1-0"
+                />
+              </FormField>
+              <FormField label="RIR" hint="reps in reserve, 0-10">
+                <NumberInput
+                  min={0}
+                  max={10}
+                  step="0.5"
+                  value={s.rir}
+                  onChange={(e) => onUpdateSet(sIdx, { rir: e.target.value })}
+                />
+              </FormField>
+            </div>
+            <label className="flex items-center gap-2 text-xs">
+              <input
+                type="checkbox"
+                checked={s.is_warmup}
+                onChange={(e) => onUpdateSet(sIdx, { is_warmup: e.target.checked })}
+                className="h-4 w-4"
+              />
+              Warmup
+            </label>
+          </div>
+        ))}
+        <button
+          type="button"
+          onClick={onAddSet}
+          className="min-h-9 w-full rounded-md border border-dashed border-zinc-300 px-3 py-1.5 text-xs text-zinc-600 hover:border-zinc-400 hover:text-zinc-950 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-zinc-500 dark:hover:text-zinc-50"
+        >
+          + Add set (copies last)
+        </button>
+      </div>
+    </div>
   );
 }

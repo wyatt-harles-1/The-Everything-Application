@@ -24,6 +24,10 @@ import {
   addExerciseToSession,
   finishSession,
 } from "../actions";
+import {
+  calculatePlates,
+  formatPlateBreakdown,
+} from "@/components/PlateBreakdown";
 
 export type SessionSet = {
   id: string;
@@ -50,6 +54,8 @@ export type SessionExercise = {
   // wellness.exercises. Null defaults => use the 90s global fallback.
   defaultRestSeconds: number | null;
   isBodyweight: boolean;
+  // Used to gate the plate calculator - only show under barbell movements.
+  equipment: string | null;
   lastPerformance: {
     reps: number | null;
     weightLbs: number | null;
@@ -59,6 +65,10 @@ export type SessionExercise = {
 };
 
 const DEFAULT_REST_SECONDS = 90;
+// Standard Olympic bar. A per-exercise override would be the natural next
+// step (women's bar = 35, training bar = 15) but isn't worth a settings UI
+// yet.
+const DEFAULT_BAR_WEIGHT_LBS = 45;
 
 function formatElapsed(ms: number): string {
   const total = Math.max(0, Math.floor(ms / 1000));
@@ -396,6 +406,7 @@ function ExerciseCard({
             key={s.id}
             set={s}
             isBodyweight={exercise.isBodyweight}
+            showPlateBreakdown={exercise.equipment === "barbell"}
             onUpdateField={onUpdateField}
             onToggleComplete={() => onToggleComplete(s)}
             onRemove={() => onRemoveSet(s.id)}
@@ -418,6 +429,7 @@ function ExerciseCard({
 function SetRow({
   set,
   isBodyweight,
+  showPlateBreakdown,
   onUpdateField,
   onToggleComplete,
   onRemove,
@@ -425,6 +437,7 @@ function SetRow({
 }: {
   set: SessionSet;
   isBodyweight: boolean;
+  showPlateBreakdown: boolean;
   onUpdateField: (
     setId: string,
     field: "reps" | "weight_lbs" | "rpe" | "rir" | "tempo",
@@ -442,6 +455,20 @@ function SetRow({
   const [detailsOpen, setDetailsOpen] = useState<boolean>(
     set.tempo != null || set.rir != null,
   );
+
+  // Plate-loading text: only on barbell exercises with a loaded bar. A
+  // bodyweight movement with an "added load" of plates would technically
+  // benefit too, but the loading semantics differ (you hang one plate, not
+  // symmetric per side), so we keep it gated to barbell.
+  const plateLine =
+    showPlateBreakdown &&
+    !isBodyweight &&
+    set.weightLbs != null &&
+    set.weightLbs >= DEFAULT_BAR_WEIGHT_LBS
+      ? formatPlateBreakdown(
+          calculatePlates(set.weightLbs, DEFAULT_BAR_WEIGHT_LBS),
+        )
+      : null;
 
   return (
     <li
@@ -547,6 +574,11 @@ function SetRow({
           ×
         </button>
       </div>
+      {plateLine ? (
+        <p className="pl-14 text-[11px] tabular-nums text-zinc-500 dark:text-zinc-400">
+          🏋 {plateLine}
+        </p>
+      ) : null}
       {detailsOpen ? (
         <div className="flex items-center gap-2 pl-14 text-xs">
           <label className="flex items-center gap-1 text-zinc-500 dark:text-zinc-400">
