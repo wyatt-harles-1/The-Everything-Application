@@ -16,6 +16,8 @@ import {
   updateGoalStatusInput,
   updateLiftingRulesInput,
   updateRunningRulesInput,
+  rememberFactInput,
+  forgetFactInput,
 } from "./mutationSchemas";
 
 export const mutationTools = {
@@ -65,5 +67,17 @@ export const mutationTools = {
     description:
       "Patch the user's running-module rules (invariant #8). Same partial-update semantics as update_lifting_rules. Sets preferred days, weekly target, default distance, and active shoe attribution for new runs. Requires approval.",
     inputSchema: updateRunningRulesInput,
+  }),
+
+  remember_fact: tool({
+    description:
+      "Persist a short factual statement about the user across future chat sessions. Write in third-person present tense ('prefers morning workouts', 'lifts at Equinox Midtown'). Requires approval. Use sparingly: only when the user states a stable preference or fact that would change advice in future conversations.",
+    inputSchema: rememberFactInput,
+  }),
+
+  forget_fact: tool({
+    description:
+      "Delete a stored memory by id. Pass an id from read_memory. Requires approval.",
+    inputSchema: forgetFactInput,
   }),
 };

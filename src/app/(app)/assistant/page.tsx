@@ -1,15 +1,22 @@
-// /assistant - chat surface. Server component fetches the user's
-// configured provider + model so the header strip can show them; the
-// streaming chat itself lives in the client AssistantChat component.
+// /assistant - chat surface. With ?thread=<id>: hydrate the existing
+// conversation. Without: auto-route to the most recent thread, or
+// create one if none exist. /assistant/threads is the alternate entry
+// point for picking a different conversation.
 
+import { redirect } from "next/navigation";
 import Link from "next/link";
 
 import { createClient } from "@/lib/supabase/server";
 import { isMasterKeyConfigured } from "@/lib/ai/encryption";
+import { listThreads, loadThread } from "@/lib/ai/persistence";
 
 import { AssistantChat } from "./AssistantChat";
 
-export default async function AssistantPage() {
+export default async function AssistantPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ thread?: string }>;
+}) {
   const supabase = await createClient();
   const { data: settings } = await supabase
     .schema("shared")
@@ -75,10 +82,39 @@ export default async function AssistantPage() {
     );
   }
 
+  // Resolve which thread to show. With ?thread=<id>, hydrate it.
+  // Otherwise auto-open the most recent existing thread, or null
+  // (let the client lazy-create on first message).
+  const { thread: threadParam } = await searchParams;
+  let threadId: string | null = threadParam ?? null;
+  let initialMessages: { id: string; role: "user" | "assistant" | "system"; parts: unknown[] }[] = [];
+
+  if (threadId) {
+    const { thread, messages } = await loadThread(supabase, threadId);
+    if (!thread) {
+      // Stale id - silently fall back to most-recent / empty.
+      threadId = null;
+    } else {
+      initialMessages = messages.map((m) => ({
+        id: m.id,
+        role: m.role,
+        parts: Array.isArray(m.parts) ? m.parts : [],
+      }));
+    }
+  }
+  if (!threadId) {
+    const recent = await listThreads(supabase);
+    if (recent.length > 0) {
+      redirect(`/assistant?thread=${recent[0].id}`);
+    }
+  }
+
   return (
     <AssistantChat
       providerLabel={settings.provider}
       modelLabel={settings.model_id ?? "default"}
+      threadId={threadId}
+      initialMessages={initialMessages}
     />
   );
 }

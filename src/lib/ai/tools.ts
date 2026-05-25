@@ -36,10 +36,10 @@ function isoDaysAgo(days: number): string {
   return new Date(Date.now() - days * 86400_000).toISOString();
 }
 
-export function buildReadTools(
-  supabase: SupabaseClient,
-  userId: string,
-) {
+// The supabase client carries the user's auth context, so RLS scopes
+// every read automatically. We keep the signature open in case future
+// tools want a fast-path user id (e.g., generated columns).
+export function buildReadTools(supabase: SupabaseClient) {
   return {
     // ------------------------------------------------------------------
     get_today_summary: tool({

@@ -1,5 +1,12 @@
-// POST /api/assistant/chat - streams an LLM response with read-only
-// tools wired in (Phase 4e2). Mutations + rules edits land in 4e3-4e4.
+// POST /api/assistant/chat - streams an LLM response with full tool +
+// persistence wiring (Phase 4e5).
+//
+// On every call:
+//  1. Validate auth, resolve model from the user's settings.
+//  2. Load assistant memory and inject into the system prompt.
+//  3. Ensure a thread exists (create lazily if the client didn't pass one).
+//  4. Persist the user's new turn before streaming.
+//  5. Stream the response; onFinish persists the assistant turn.
 
 import {
   streamText,
@@ -15,11 +22,18 @@ import {
 } from "@/lib/ai/provider";
 import { buildReadTools } from "@/lib/ai/tools";
 import { mutationTools } from "@/lib/ai/mutationTools";
+import {
+  appendMessages,
+  createThread,
+  deriveThreadTitle,
+  formatMemoriesForPrompt,
+  listMemories,
+} from "@/lib/ai/persistence";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-const SYSTEM_PROMPT = `You are the user's personal assistant inside Life Hub, a single-user personal management app that aggregates wellness, lifting, running, scheduling, habits, and goals data.
+const BASE_SYSTEM_PROMPT = `You are the user's personal assistant inside Life Hub, a single-user personal management app that aggregates wellness, lifting, running, scheduling, habits, and goals data.
 
 READ-ONLY TOOLS (auto-execute; results stream back to you):
 - get_today_summary: one-shot daily briefing. Call first for "how's today/this week" questions.
@@ -34,24 +48,24 @@ MUTATION TOOLS (require the USER to approve in the UI before committing):
 - create_habit: new recurring habit with weekly target.
 - create_goal: new shared.goals row.
 - update_goal_status: flip a goal to active / paused / achieved / abandoned.
-- update_lifting_rules / update_running_rules: partial-update the module rules table (invariant #8). Only include fields you actually want to change - absent fields preserve their current value. Use these to encode preferences the suggestion engine + future automation will respect ("lift 4x/week", "prefer Tue/Thu/Sat", "skip deload weeks").
+- update_lifting_rules / update_running_rules: partial-update the module rules table (invariant #8).
+- remember_fact: save a short factual statement that persists across chat sessions. Use sparingly - only stable preferences/facts that change advice in future conversations.
+- forget_fact: delete a stored memory by id.
 
 Rules of engagement:
 - Wyatt prefers terse, direct answers over warm ones. No "Great question!" preambles.
 - Quote concrete numbers from tool results. If a tool returns empty/null, say so plainly.
-- Before calling a mutation, briefly state what you're about to do in plain English so the approve/reject button has context. Example: "I'll schedule a lift for Wednesday at 5pm — approve?"
+- Before calling a mutation, briefly state what you're about to do in plain English so the approve/reject button has context.
 - Don't apologize for needing approval; it's the safety contract, not a bug.
-- You can chain reads then a mutation in one turn. Example: query_goals -> identify the right id -> update_goal_status.
-- Today's date is in the system's timezone; when scheduling, pick reasonable defaults (e.g., next Wednesday 5pm) and let the user override.`;
+- You can chain reads then a mutation in one turn.
+- Today's date is in the system's timezone; pick reasonable defaults and let the user override.`;
 
 export async function POST(req: Request) {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) {
-    return new Response("Unauthorized", { status: 401 });
-  }
+  if (!user) return new Response("Unauthorized", { status: 401 });
 
   let model;
   try {
@@ -67,24 +81,75 @@ export async function POST(req: Request) {
     throw e;
   }
 
-  const body = (await req.json()) as { messages: UIMessage[] };
-  const messages = await convertToModelMessages(body.messages ?? []);
+  const body = (await req.json()) as {
+    messages: UIMessage[];
+    threadId?: string | null;
+  };
 
+  // Lazy-create the thread if the client didn't pass one. Title is
+  // derived from the first user message.
+  let threadId = body.threadId ?? null;
+  const newUserMessage = body.messages[body.messages.length - 1];
+  if (!threadId) {
+    const title =
+      newUserMessage?.role === "user"
+        ? deriveThreadTitle(newUserMessage.parts)
+        : null;
+    const created = await createThread(supabase, user.id, title ?? undefined);
+    threadId = created.id;
+  }
+
+  // Persist the newest user turn before streaming. Older messages are
+  // already on disk from previous calls in this thread.
+  if (newUserMessage && newUserMessage.role === "user") {
+    await appendMessages(supabase, user.id, threadId, [
+      { role: "user", parts: newUserMessage.parts },
+    ]);
+  }
+
+  // Memory injection: fetch all facts the agent should remember about
+  // the user and append to the base system prompt.
+  const memories = await listMemories(supabase);
+  const systemPrompt =
+    BASE_SYSTEM_PROMPT + formatMemoriesForPrompt(memories);
+
+  const modelMessages = await convertToModelMessages(body.messages ?? []);
+
+  const persistedThreadId = threadId;
   const result = streamText({
     model,
-    system: SYSTEM_PROMPT,
-    messages,
+    system: systemPrompt,
+    messages: modelMessages,
     tools: {
-      ...buildReadTools(supabase, user.id),
-      // Mutation tools have no `execute` - client renders an approve
-      // button and calls /api/assistant/run-tool to commit.
+      ...buildReadTools(supabase),
       ...mutationTools,
     },
-    // Cap multi-step tool calling so a runaway loop can't burn tokens.
-    // 8 steps lets the model chain a few reads then a mutation + final
-    // response without hitting the ceiling.
     stopWhen: stepCountIs(8),
+    onFinish: async ({ response }) => {
+      // Persist every new assistant message produced this turn. The
+      // response.messages array carries assistant turns AND tool-result
+      // turns; we only persist the assistant ones (tool results live
+      // inside the assistant message's parts).
+      const newAssistantMessages = response.messages
+        .filter((m) => m.role === "assistant")
+        .map((m) => ({
+          role: "assistant" as const,
+          parts: m.content,
+        }));
+      if (newAssistantMessages.length > 0) {
+        await appendMessages(
+          supabase,
+          user.id,
+          persistedThreadId,
+          newAssistantMessages,
+        );
+      }
+    },
   });
 
-  return result.toUIMessageStreamResponse();
+  // Include the (possibly newly created) thread id in a custom header
+  // so the client can update its URL on first message.
+  const response = result.toUIMessageStreamResponse();
+  response.headers.set("x-thread-id", threadId);
+  return response;
 }

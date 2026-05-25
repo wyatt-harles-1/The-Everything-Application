@@ -112,6 +112,22 @@ export const updateRunningRulesInput = z.object({
 });
 export type UpdateRunningRulesInput = z.infer<typeof updateRunningRulesInput>;
 
+// Memory mutations - the agent's "remember this" surface.
+export const rememberFactInput = z.object({
+  fact: z
+    .string()
+    .min(1)
+    .max(500)
+    .describe("Short, factual statement about the user written in third-person present tense"),
+  category: z.string().max(80).optional(),
+});
+export type RememberFactInput = z.infer<typeof rememberFactInput>;
+
+export const forgetFactInput = z.object({
+  memory_id: z.string().uuid(),
+});
+export type ForgetFactInput = z.infer<typeof forgetFactInput>;
+
 // Discriminated map - lets the dispatcher pick the right schema by name
 // in a type-safe way.
 export const mutationSchemas = {
@@ -123,6 +139,8 @@ export const mutationSchemas = {
   update_goal_status: updateGoalStatusInput,
   update_lifting_rules: updateLiftingRulesInput,
   update_running_rules: updateRunningRulesInput,
+  remember_fact: rememberFactInput,
+  forget_fact: forgetFactInput,
 } as const;
 
 export type MutationName = keyof typeof mutationSchemas;

@@ -15,8 +15,10 @@ import { recordEvent } from "@/lib/db/events";
 import type {
   CreateGoalInput,
   CreateHabitInput,
+  ForgetFactInput,
   MarkEventDoneInput,
   MarkEventSkippedInput,
+  RememberFactInput,
   ScheduleEventInput,
   UpdateGoalStatusInput,
   UpdateLiftingRulesInput,
@@ -260,4 +262,36 @@ export async function agentUpdateRunningRules(
       notes: null,
     },
   });
+}
+
+export async function agentRememberFact(
+  ctx: Ctx,
+  input: RememberFactInput,
+): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  const { data, error } = await ctx.supabase
+    .schema("shared")
+    .from("assistant_memory")
+    .insert({
+      user_id: ctx.userId,
+      fact: input.fact,
+      category: input.category ?? null,
+      source: "agent",
+    })
+    .select("id")
+    .single();
+  if (error || !data) return { ok: false, error: error?.message ?? "Insert failed" };
+  return { ok: true, id: data.id };
+}
+
+export async function agentForgetFact(
+  ctx: Ctx,
+  input: ForgetFactInput,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { error } = await ctx.supabase
+    .schema("shared")
+    .from("assistant_memory")
+    .delete()
+    .eq("id", input.memory_id);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
 }

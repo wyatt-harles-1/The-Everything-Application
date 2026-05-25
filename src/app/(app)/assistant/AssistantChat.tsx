@@ -6,8 +6,9 @@
 // thread persistence ship in later sub-waves.
 
 import { useChat } from "@ai-sdk/react";
-import { DefaultChatTransport } from "ai";
-import { useState } from "react";
+import { DefaultChatTransport, type UIMessage } from "ai";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import Link from "next/link";
 
@@ -23,20 +24,60 @@ const MUTATION_TOOL_NAMES = new Set([
   "update_goal_status",
   "update_lifting_rules",
   "update_running_rules",
+  "remember_fact",
+  "forget_fact",
 ]);
 
 export function AssistantChat({
   providerLabel,
   modelLabel,
+  threadId,
+  initialMessages,
 }: {
   providerLabel: string | null;
   modelLabel: string | null;
+  threadId: string | null;
+  initialMessages: { id: string; role: "user" | "assistant" | "system"; parts: unknown[] }[];
 }) {
+  const router = useRouter();
+  // Track the effective thread id. May start null (brand-new chat); the
+  // server creates one on first message and returns it in x-thread-id.
+  const [activeThreadId, setActiveThreadId] = useState<string | null>(
+    threadId,
+  );
+
   const { messages, sendMessage, addToolResult, status, error } = useChat({
+    // The persisted message shape matches AI SDK v6's UIMessage, but the
+    // outer cast keeps the hook happy without us reasserting every part
+    // type. Tool-call parts inside roundtrip verbatim.
+    messages: initialMessages as unknown as UIMessage[],
     transport: new DefaultChatTransport({
       api: "/api/assistant/chat",
+      // Sent on every request; lets the chat route attach new turns to
+      // the right thread or create a new one when null.
+      body: () => ({ threadId: activeThreadId }),
+      // Custom fetch wrapper picks up x-thread-id from the response so
+      // the client learns the new id the chat route created lazily on
+      // the first message. setState dedupes if the value didn't change.
+      fetch: async (input, init) => {
+        const res = await fetch(input, init);
+        const newId = res.headers.get("x-thread-id");
+        if (newId) setActiveThreadId(newId);
+        return res;
+      },
     }),
   });
+  // First-message URL update: once the server tells us the new thread
+  // id, push it into the URL so reloads + bookmarks hit the right
+  // thread. router.replace avoids growing the back-stack on the very
+  // first message of every new chat.
+  useEffect(() => {
+    if (activeThreadId && activeThreadId !== threadId) {
+      router.replace(`/assistant?thread=${activeThreadId}`, {
+        scroll: false,
+      });
+    }
+  }, [activeThreadId, threadId, router]);
   const [input, setInput] = useState("");
   // Per tool-call id: track whether we're currently committing it so the
   // UI can show a spinner / disable buttons.
@@ -111,12 +152,26 @@ export function AssistantChat({
             </Link>
             <h1 className="text-base font-semibold">Assistant</h1>
           </div>
-          <Link
-            href="/assistant/settings"
-            className="shrink-0 text-xs text-zinc-500 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-zinc-50"
-          >
-            {providerLabel ? `${providerLabel} · ${modelLabel}` : "settings"} →
-          </Link>
+          <div className="flex shrink-0 items-center gap-3 text-xs text-zinc-500 dark:text-zinc-400">
+            <Link
+              href="/assistant/threads"
+              className="hover:text-zinc-950 dark:hover:text-zinc-50"
+            >
+              threads
+            </Link>
+            <Link
+              href="/assistant/memory"
+              className="hover:text-zinc-950 dark:hover:text-zinc-50"
+            >
+              memory
+            </Link>
+            <Link
+              href="/assistant/settings"
+              className="hover:text-zinc-950 dark:hover:text-zinc-50"
+            >
+              {providerLabel ? `${providerLabel} · ${modelLabel}` : "settings"}
+            </Link>
+          </div>
         </div>
       </header>
 

@@ -17,6 +17,8 @@ import {
   agentUpdateGoalStatus,
   agentUpdateLiftingRules,
   agentUpdateRunningRules,
+  agentRememberFact,
+  agentForgetFact,
 } from "@/lib/ai/mutations";
 
 export const runtime = "nodejs";
@@ -112,6 +114,20 @@ export async function POST(req: Request) {
         await agentUpdateRunningRules(
           ctx,
           parsed.data as Parameters<typeof agentUpdateRunningRules>[1],
+        ),
+      );
+    case "remember_fact":
+      return Response.json(
+        await agentRememberFact(
+          ctx,
+          parsed.data as Parameters<typeof agentRememberFact>[1],
+        ),
+      );
+    case "forget_fact":
+      return Response.json(
+        await agentForgetFact(
+          ctx,
+          parsed.data as Parameters<typeof agentForgetFact>[1],
         ),
       );
   }
