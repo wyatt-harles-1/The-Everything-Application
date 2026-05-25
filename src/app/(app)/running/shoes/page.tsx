@@ -6,7 +6,7 @@ import Link from "next/link";
 
 import { createClient } from "@/lib/supabase/server";
 import { formatDate } from "@/lib/format";
-import { formatMiles, metersToMiles } from "@/lib/running/format";
+import { metersToMiles } from "@/lib/running/format";
 
 type ShoeRow = {
   id: string;

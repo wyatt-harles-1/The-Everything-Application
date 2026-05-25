@@ -11,10 +11,7 @@ import Link from "next/link";
 
 import { createClient } from "@/lib/supabase/server";
 import { formatDateTime, formatTime } from "@/lib/format";
-import {
-  computeHabitProgress,
-  startOfISOWeek,
-} from "@/lib/scheduler/streak";
+import { computeHabitProgress } from "@/lib/scheduler/streak";
 import {
   computeMesoProgress,
   formatMesoStatusShort,
@@ -312,13 +309,14 @@ export default async function HomePage() {
         <h2 className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
           Sections
         </h2>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           <QuickLink href="/schedule" label="Schedule" />
           <QuickLink href="/habits" label="Habits" />
           <QuickLink href="/goals" label="Goals" />
           <QuickLink href="/lifting" label="Lifting" />
           <QuickLink href="/running" label="Running" />
           <QuickLink href="/health" label="Health" />
+          <QuickLink href="/assistant" label="Assistant" />
         </div>
       </section>
 
