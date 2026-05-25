@@ -68,15 +68,52 @@ export function AssistantChat({
 
         {messages.map((m) => (
           <MessageBubble key={m.id} role={m.role}>
-            {/* useChat v6+ exposes structured parts on each message; for
-                v1 we render text parts only. Tool calls / files come
-                in later sub-waves. */}
             {m.parts.map((p, idx) => {
               if (p.type === "text") {
                 return (
                   <span key={idx} className="whitespace-pre-wrap">
                     {p.text}
                   </span>
+                );
+              }
+              // Tool-call parts: `tool-<toolName>` per AI SDK v6. Render
+              // a compact disclosure so the user can see what the agent
+              // looked at without flooding the bubble. Most users will
+              // skim the chip; power users can expand it for the JSON.
+              if (typeof p.type === "string" && p.type.startsWith("tool-")) {
+                const toolName = p.type.slice("tool-".length);
+                const part = p as unknown as {
+                  state:
+                    | "input-streaming"
+                    | "input-available"
+                    | "output-available"
+                    | "output-error";
+                  input?: unknown;
+                  output?: unknown;
+                  errorText?: string;
+                };
+                const running =
+                  part.state === "input-streaming" ||
+                  part.state === "input-available";
+                return (
+                  <details
+                    key={idx}
+                    className="mt-1 first:mt-0 rounded border border-zinc-200 bg-zinc-50/60 px-2 py-1 text-[11px] dark:border-zinc-700 dark:bg-zinc-900/50"
+                  >
+                    <summary className="cursor-pointer select-none text-zinc-500 dark:text-zinc-400">
+                      {running ? "⋯" : "✓"} {toolName}
+                      {part.state === "output-error" ? " · error" : ""}
+                    </summary>
+                    {part.state === "output-available" ? (
+                      <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap break-words text-[10px] text-zinc-600 dark:text-zinc-400">
+                        {JSON.stringify(part.output, null, 2)}
+                      </pre>
+                    ) : part.state === "output-error" ? (
+                      <p className="mt-1 text-[10px] text-red-600 dark:text-red-400">
+                        {part.errorText ?? "unknown error"}
+                      </p>
+                    ) : null}
+                  </details>
                 );
               }
               return null;
