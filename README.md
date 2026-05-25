@@ -2,12 +2,14 @@
 
 A personal life-management application. Aggregates data from third-party
 services (Strava, Cronometer, Apple Health, Plaid, etc.) and from
-first-party modules (weightlifting, mobility, scheduling, bloodwork,
-finance) into a unified, queryable timeline backed by Postgres.
+first-party modules (weightlifting, running, scheduling, health, bloodwork,
+finance) into a unified, queryable timeline backed by Postgres, with an AI
+assistant that can read and act across every module.
 
-This is **Phase 1**: the foundation only — schemas, the universal events
-pattern, RLS, a deployment pipeline. There is no UI yet beyond a placeholder
-landing page and a health-check endpoint. Manual logging arrives in Phase 2.
+> **This file is the developer setup guide.** For the project's purpose,
+> current status, feature checklists, and the active plan, see
+> [`PROJECT.md`](./PROJECT.md). To resume work in a Claude session, say
+> *"read PROJECT.md and let's continue."*
 
 ---
 
@@ -83,19 +85,31 @@ pnpm build
 ```
 .
 ├── src/
-│   ├── app/                  Next.js App Router
-│   │   ├── (auth)/           Auth pages (Phase 2)
-│   │   ├── api/health/       Health-check route handler
-│   │   ├── layout.tsx        Root HTML layout
-│   │   └── page.tsx          Landing page (placeholder)
+│   ├── app/
+│   │   ├── (app)/            Auth-guarded app: dashboard + module hubs
+│   │   │   ├── log/          Manual logging forms
+│   │   │   ├── lifting/      Weightlifting module
+│   │   │   ├── running/      Running module
+│   │   │   ├── health/       Health hub
+│   │   │   ├── schedule/     Scheduler / planner
+│   │   │   ├── habits/       Habit tracking
+│   │   │   ├── goals/        Goals
+│   │   │   └── assistant/    AI assistant (chat, threads, memory, settings)
+│   │   ├── (auth)/           Login / auth callback
+│   │   ├── api/              Route handlers (health, assistant/*)
+│   │   └── layout.tsx        Root HTML layout
 │   ├── lib/
-│   │   ├── supabase/         Three clients: browser / server / admin
-│   │   └── types/            Shared TypeScript types (empty in Phase 1)
-│   ├── modules/              First-party feature modules (Phase 3+)
-│   └── components/           Shared UI components (Phase 2+)
+│   │   ├── supabase/         Browser / server / admin clients
+│   │   ├── ai/               Assistant: provider, tools, mutations, coach, memory
+│   │   ├── validation/       Zod schemas
+│   │   └── …                 Domain helpers (lifting, running, scheduler, format)
+│   └── components/           Shared UI components
 ├── supabase/
 │   ├── migrations/           Versioned SQL — checked in
+│   ├── config.toml           Local stack config (api.schemas list lives here)
 │   └── seed.sql              Data applied on `supabase db reset`
+├── PROJECT.md                Living plan + status (start here)
+├── CLAUDE.md                 Instructions Claude auto-loads
 ├── .env.example              Env template — committed
 ├── .env.local                Real env values — gitignored
 └── package.json
@@ -129,29 +143,13 @@ RLS on after data exists is much harder than starting with it on.
 
 ---
 
-## Known limitations of Phase 1
+## Status & roadmap
 
-- **No UI features.** The landing page is a placeholder. Manual logging UI
-  arrives in Phase 2.
-- **No auth flow.** Supabase Auth is wired into the clients but there's no
-  sign-in / sign-up page yet. Create users in Supabase Studio for now.
-- **No domain tables.** `wellness.workouts`, `wellness.meals`, etc. arrive
-  with Phase 2 and the weightlifting module in Phase 3.
-- **No integrations.** Strava / Cronometer / Plaid / etc. start in Phase 5.
-- **No AI features.** Personal trainer / doctor / financial advisor start in
-  Phase 6.
+Phases 1–3 (foundation, manual logging, weightlifting) are complete, and
+Phase 4 (base Life Hub features — scheduler, goals, dashboard, running/health
+modules, AI assistant) is mostly shipped. Integrations (Strava, Cronometer,
+Apple Health, Plaid) and the finance/knowledge domains are still ahead.
 
----
-
-## Phase roadmap
-
-| Phase | Scope |
-| --- | --- |
-| **1** (you are here) | Project foundation, database schema, deployment pipeline |
-| 2 | Manual logging UI + first domain tables |
-| 3 | Weightlifting module |
-| 4 | Scheduling engine + module system |
-| 5 | Wellness integrations (Strava, Cronometer, Apple Health) |
-| 6 | Dashboard + AI personal trainer |
-| 7 | Bloodwork module + AI doctor |
-| 8 | Finance domain + AI financial advisor |
+For the detailed, always-current status — feature checklists, the phase
+roadmap, known tech debt, and what's being worked on right now — see
+[`PROJECT.md`](./PROJECT.md).
