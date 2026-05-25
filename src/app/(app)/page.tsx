@@ -312,11 +312,12 @@ export default async function HomePage() {
         <h2 className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
           Sections
         </h2>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
           <QuickLink href="/schedule" label="Schedule" />
           <QuickLink href="/habits" label="Habits" />
           <QuickLink href="/goals" label="Goals" />
           <QuickLink href="/lifting" label="Lifting" />
+          <QuickLink href="/running" label="Running" />
         </div>
       </section>
 

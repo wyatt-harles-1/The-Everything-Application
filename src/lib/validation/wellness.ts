@@ -120,6 +120,12 @@ export const cardioSessionSchema = z.object({
   max_heart_rate: optionalInt,
   elevation_gain_meters: optionalNumber,
   route_notes: optionalText,
+  // Optional link to a wellness.shoes row (Phase 4d-running). Empty string
+  // from the form -> undefined; the action then writes null.
+  shoe_id: z.preprocess(
+    (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+    z.string().uuid().optional(),
+  ),
 });
 
 export const mobilityEntrySchema = z.object({

@@ -45,6 +45,7 @@ export type WorkoutFormDefaults = {
     avg_heart_rate?: number | null;
     max_heart_rate?: number | null;
     elevation_gain_meters?: number | null;
+    shoe_id?: string | null;
     route_notes?: string;
   };
   mobility?: {
@@ -73,6 +74,7 @@ export function WorkoutForm({
   defaults = {},
   submitLabel,
   exerciseNames = [],
+  activeShoes = [],
 }: {
   action: Action;
   defaults?: WorkoutFormDefaults;
@@ -81,6 +83,9 @@ export function WorkoutForm({
    *  autocomplete. Empty if the library is empty - in which case the input
    *  still works as plain free text. */
   exerciseNames?: string[];
+  /** Active shoes (Phase 4d-running), fed into the cardio sub-form's shoe
+   *  selector. Empty = the selector is hidden. */
+  activeShoes?: { id: string; name: string }[];
 }) {
   const [state, formAction] = useActionState<FormActionState, FormData>(
     action,
@@ -350,6 +355,22 @@ export function WorkoutForm({
               />
             </FormField>
           </div>
+          {activeShoes.length > 0 ? (
+            <FormField label="Shoe" htmlFor="shoe_id">
+              <Select
+                id="shoe_id"
+                name="shoe_id"
+                defaultValue={defaults.cardio?.shoe_id ?? ""}
+              >
+                <option value="">— none —</option>
+                {activeShoes.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </Select>
+            </FormField>
+          ) : null}
           <FormField label="Route notes" htmlFor="route_notes">
             <TextArea
               id="route_notes"

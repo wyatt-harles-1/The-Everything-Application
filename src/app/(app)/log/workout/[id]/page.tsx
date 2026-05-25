@@ -74,6 +74,7 @@ export default async function WorkoutDetailPage({
         max_heart_rate: cardio.max_heart_rate,
         elevation_gain_meters: cardio.elevation_gain_meters,
         route_notes: cardio.route_notes ?? "",
+        shoe_id: cardio.shoe_id ?? null,
       };
     }
   } else if (workout.kind === "mobility") {
@@ -95,13 +96,22 @@ export default async function WorkoutDetailPage({
   // Pull the user's exercise library for the lifting sub-form's
   // autocomplete. Cheap query and the form always renders so we don't
   // gate it on kind.
-  const { data: libExercises } = await supabase
-    .schema("wellness")
-    .from("exercises")
-    .select("name")
-    .eq("is_active", true)
-    .order("name", { ascending: true });
+  const [{ data: libExercises }, { data: shoeRows }] = await Promise.all([
+    supabase
+      .schema("wellness")
+      .from("exercises")
+      .select("name")
+      .eq("is_active", true)
+      .order("name", { ascending: true }),
+    supabase
+      .schema("wellness")
+      .from("shoes")
+      .select("id, name")
+      .is("retired_at", null)
+      .order("started_at", { ascending: false }),
+  ]);
   const exerciseNames = (libExercises ?? []).map((e) => e.name);
+  const activeShoes = (shoeRows ?? []) as { id: string; name: string }[];
 
   return (
     <div className="space-y-6">
@@ -128,6 +138,7 @@ export default async function WorkoutDetailPage({
         submitLabel="Update workout"
         defaults={defaults}
         exerciseNames={exerciseNames}
+        activeShoes={activeShoes}
       />
 
       <hr className="border-zinc-200 dark:border-zinc-800" />

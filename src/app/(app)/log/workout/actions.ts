@@ -159,6 +159,7 @@ async function writeKindDetail(
         max_heart_rate: c.max_heart_rate ?? null,
         elevation_gain_meters: c.elevation_gain_meters ?? null,
         route_notes: c.route_notes ?? null,
+        shoe_id: c.shoe_id ?? null,
       });
     if (error) return { error: error.message };
     return {

@@ -10,13 +10,22 @@ export default async function NewWorkoutPage() {
   // exercise names. The actions.ts side resolves the typed name back to an
   // exercise_id when it matches.
   const supabase = await createClient();
-  const { data: exercises } = await supabase
-    .schema("wellness")
-    .from("exercises")
-    .select("name")
-    .eq("is_active", true)
-    .order("name", { ascending: true });
+  const [{ data: exercises }, { data: shoes }] = await Promise.all([
+    supabase
+      .schema("wellness")
+      .from("exercises")
+      .select("name")
+      .eq("is_active", true)
+      .order("name", { ascending: true }),
+    supabase
+      .schema("wellness")
+      .from("shoes")
+      .select("id, name")
+      .is("retired_at", null)
+      .order("started_at", { ascending: false }),
+  ]);
   const exerciseNames = (exercises ?? []).map((e) => e.name);
+  const activeShoes = (shoes ?? []) as { id: string; name: string }[];
 
   return (
     <div className="space-y-6">
@@ -36,6 +45,7 @@ export default async function NewWorkoutPage() {
         action={createWorkout}
         submitLabel="Save workout"
         exerciseNames={exerciseNames}
+        activeShoes={activeShoes}
       />
     </div>
   );
