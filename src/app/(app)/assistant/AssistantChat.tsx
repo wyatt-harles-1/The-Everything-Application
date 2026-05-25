@@ -11,6 +11,18 @@ import { useState } from "react";
 
 import Link from "next/link";
 
+// Tool names that require user approval. Kept in sync with mutationTools
+// on the server; if it gains a new key, add it here too. Read tools are
+// not in this set, so the UI never blocks on them.
+const MUTATION_TOOL_NAMES = new Set([
+  "schedule_event",
+  "mark_event_done",
+  "mark_event_skipped",
+  "create_habit",
+  "create_goal",
+  "update_goal_status",
+]);
+
 export function AssistantChat({
   providerLabel,
   modelLabel,
@@ -18,12 +30,17 @@ export function AssistantChat({
   providerLabel: string | null;
   modelLabel: string | null;
 }) {
-  const { messages, sendMessage, status, error } = useChat({
+  const { messages, sendMessage, addToolResult, status, error } = useChat({
     transport: new DefaultChatTransport({
       api: "/api/assistant/chat",
     }),
   });
   const [input, setInput] = useState("");
+  // Per tool-call id: track whether we're currently committing it so the
+  // UI can show a spinner / disable buttons.
+  const [pendingApprovals, setPendingApprovals] = useState<Set<string>>(
+    new Set(),
+  );
   const isStreaming = status === "submitted" || status === "streaming";
 
   function onSubmit(e: React.FormEvent) {
@@ -32,6 +49,50 @@ export function AssistantChat({
     if (!text || isStreaming) return;
     sendMessage({ text });
     setInput("");
+  }
+
+  async function onApprove(
+    toolCallId: string,
+    toolName: string,
+    input: unknown,
+  ) {
+    setPendingApprovals((prev) => new Set(prev).add(toolCallId));
+    try {
+      const res = await fetch("/api/assistant/run-tool", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tool: toolName, input }),
+      });
+      const result = await res.json();
+      addToolResult({
+        tool: toolName,
+        toolCallId,
+        output: result,
+      });
+    } catch (e) {
+      addToolResult({
+        tool: toolName,
+        toolCallId,
+        output: {
+          ok: false,
+          error: e instanceof Error ? e.message : "Request failed",
+        },
+      });
+    } finally {
+      setPendingApprovals((prev) => {
+        const next = new Set(prev);
+        next.delete(toolCallId);
+        return next;
+      });
+    }
+  }
+
+  function onReject(toolCallId: string, toolName: string) {
+    addToolResult({
+      tool: toolName,
+      toolCallId,
+      output: { ok: false, error: "User rejected the action." },
+    });
   }
 
   return (
@@ -76,13 +137,17 @@ export function AssistantChat({
                   </span>
                 );
               }
-              // Tool-call parts: `tool-<toolName>` per AI SDK v6. Render
-              // a compact disclosure so the user can see what the agent
-              // looked at without flooding the bubble. Most users will
-              // skim the chip; power users can expand it for the JSON.
+              // Tool-call parts: `tool-<toolName>` per AI SDK v6. Two
+              // flavors:
+              //  - Read tools: auto-executed; show JSON output for power
+              //    users; nothing required from the human.
+              //  - Mutation tools: have NO execute on the server; arrive
+              //    in state "input-available" and stay there until the
+              //    UI calls addToolResult. Render approve/reject buttons.
               if (typeof p.type === "string" && p.type.startsWith("tool-")) {
                 const toolName = p.type.slice("tool-".length);
                 const part = p as unknown as {
+                  toolCallId: string;
                   state:
                     | "input-streaming"
                     | "input-available"
@@ -92,18 +157,83 @@ export function AssistantChat({
                   output?: unknown;
                   errorText?: string;
                 };
+                const isMutation = MUTATION_TOOL_NAMES.has(toolName);
+                const awaitingApproval =
+                  isMutation && part.state === "input-available";
                 const running =
-                  part.state === "input-streaming" ||
-                  part.state === "input-available";
+                  !isMutation &&
+                  (part.state === "input-streaming" ||
+                    part.state === "input-available");
+                const isPendingCommit = pendingApprovals.has(part.toolCallId);
+
                 return (
                   <details
                     key={idx}
-                    className="mt-1 first:mt-0 rounded border border-zinc-200 bg-zinc-50/60 px-2 py-1 text-[11px] dark:border-zinc-700 dark:bg-zinc-900/50"
+                    open={awaitingApproval}
+                    className={`mt-1 first:mt-0 rounded border px-2 py-1 text-[11px] ${
+                      awaitingApproval
+                        ? "border-violet-300 bg-violet-50/70 dark:border-violet-700 dark:bg-violet-950/40"
+                        : "border-zinc-200 bg-zinc-50/60 dark:border-zinc-700 dark:bg-zinc-900/50"
+                    }`}
                   >
                     <summary className="cursor-pointer select-none text-zinc-500 dark:text-zinc-400">
-                      {running ? "⋯" : "✓"} {toolName}
-                      {part.state === "output-error" ? " · error" : ""}
+                      {awaitingApproval
+                        ? "⚠"
+                        : running
+                          ? "⋯"
+                          : part.state === "output-error"
+                            ? "✗"
+                            : "✓"}{" "}
+                      <span
+                        className={
+                          isMutation
+                            ? "font-medium text-violet-700 dark:text-violet-300"
+                            : ""
+                        }
+                      >
+                        {toolName}
+                      </span>
+                      {awaitingApproval ? " · awaiting approval" : null}
+                      {part.state === "output-error" ? " · error" : null}
                     </summary>
+
+                    {/* Always show the input args - especially for mutations
+                        so the human sees exactly what's being proposed. */}
+                    {part.input !== undefined ? (
+                      <pre className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap break-words text-[10px] text-zinc-700 dark:text-zinc-300">
+                        {JSON.stringify(part.input, null, 2)}
+                      </pre>
+                    ) : null}
+
+                    {awaitingApproval ? (
+                      <div className="mt-2 flex gap-2">
+                        <button
+                          type="button"
+                          disabled={isPendingCommit}
+                          onClick={() =>
+                            onApprove(
+                              part.toolCallId,
+                              toolName,
+                              part.input,
+                            )
+                          }
+                          className="min-h-8 rounded-md bg-violet-600 px-3 py-1 text-xs font-medium text-white hover:bg-violet-700 disabled:opacity-50"
+                        >
+                          {isPendingCommit ? "…" : "Approve"}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isPendingCommit}
+                          onClick={() =>
+                            onReject(part.toolCallId, toolName)
+                          }
+                          className="min-h-8 rounded-md border border-zinc-300 px-3 py-1 text-xs font-medium hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    ) : null}
+
                     {part.state === "output-available" ? (
                       <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap break-words text-[10px] text-zinc-600 dark:text-zinc-400">
                         {JSON.stringify(part.output, null, 2)}
