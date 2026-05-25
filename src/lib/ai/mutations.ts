@@ -19,6 +19,8 @@ import type {
   MarkEventSkippedInput,
   ScheduleEventInput,
   UpdateGoalStatusInput,
+  UpdateLiftingRulesInput,
+  UpdateRunningRulesInput,
 } from "./mutationSchemas";
 
 type Ctx = { userId: string; sourceId: string; supabase: SupabaseClient };
@@ -171,4 +173,91 @@ export async function agentUpdateGoalStatus(
     .eq("id", input.goal_id);
   if (error) return { ok: false, error: error.message };
   return { ok: true };
+}
+
+// Partial-update semantics on the rules tables: only the fields the
+// agent actually provided get written. Existing values for the other
+// columns are preserved by reading the current row first and merging.
+// Upsert because the row may not exist yet for new users.
+async function upsertRules<
+  T extends Record<string, unknown>,
+>(args: {
+  ctx: Ctx;
+  table: "lifting_rules" | "running_rules";
+  patch: T;
+  defaults: T;
+}): Promise<{ ok: true; patched_fields: string[] } | { ok: false; error: string }> {
+  const { ctx, table, patch, defaults } = args;
+
+  // Strip undefined keys so the spread doesn't overwrite stored values
+  // with undefined. Null IS a valid clear instruction and is kept.
+  const cleanedPatch: Record<string, unknown> = {};
+  const patchedFields: string[] = [];
+  for (const [k, v] of Object.entries(patch)) {
+    if (v !== undefined) {
+      cleanedPatch[k] = v;
+      patchedFields.push(k);
+    }
+  }
+  if (patchedFields.length === 0) {
+    return { ok: false, error: "No fields supplied to update" };
+  }
+
+  const { data: existing } = await ctx.supabase
+    .schema("wellness")
+    .from(table)
+    .select("*")
+    .eq("user_id", ctx.userId)
+    .maybeSingle();
+
+  const next = {
+    ...(existing ?? defaults),
+    ...cleanedPatch,
+    user_id: ctx.userId,
+    source_id: ctx.sourceId,
+  };
+
+  const { error } = await ctx.supabase
+    .schema("wellness")
+    .from(table)
+    .upsert(next, { onConflict: "user_id" });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, patched_fields: patchedFields };
+}
+
+export async function agentUpdateLiftingRules(
+  ctx: Ctx,
+  input: UpdateLiftingRulesInput,
+): Promise<{ ok: true; patched_fields: string[] } | { ok: false; error: string }> {
+  return upsertRules({
+    ctx,
+    table: "lifting_rules",
+    patch: input as Record<string, unknown>,
+    defaults: {
+      frequency_per_week: 3,
+      preferred_days: null,
+      default_time: "17:00",
+      skip_deload: false,
+      notes: null,
+    },
+  });
+}
+
+export async function agentUpdateRunningRules(
+  ctx: Ctx,
+  input: UpdateRunningRulesInput,
+): Promise<{ ok: true; patched_fields: string[] } | { ok: false; error: string }> {
+  return upsertRules({
+    ctx,
+    table: "running_rules",
+    patch: input as Record<string, unknown>,
+    defaults: {
+      frequency_per_week: 3,
+      preferred_days: null,
+      default_time: "07:00",
+      default_distance_meters: null,
+      active_shoe_id: null,
+      notes: null,
+    },
+  });
 }

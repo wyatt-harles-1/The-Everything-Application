@@ -21,6 +21,8 @@ const MUTATION_TOOL_NAMES = new Set([
   "create_habit",
   "create_goal",
   "update_goal_status",
+  "update_lifting_rules",
+  "update_running_rules",
 ]);
 
 export function AssistantChat({

@@ -512,5 +512,39 @@ export function buildReadTools(
         return { count: data?.length ?? 0, entries: data ?? [] };
       },
     }),
+
+    // ------------------------------------------------------------------
+    get_lifting_rules: tool({
+      description:
+        "The user's current lifting-module rules row (invariant #8). Includes weekly frequency, preferred days, default time, skip_deload flag. Returns nulls when no row exists yet (defaults will be used).",
+      inputSchema: z.object({}),
+      execute: async () => {
+        const { data } = await supabase
+          .schema("wellness")
+          .from("lifting_rules")
+          .select(
+            "frequency_per_week, preferred_days, default_time, skip_deload, notes",
+          )
+          .maybeSingle();
+        return { rules: data ?? null };
+      },
+    }),
+
+    // ------------------------------------------------------------------
+    get_running_rules: tool({
+      description:
+        "The user's current running-module rules row (invariant #8). Frequency, preferred days, default time, default distance (meters), active_shoe_id.",
+      inputSchema: z.object({}),
+      execute: async () => {
+        const { data } = await supabase
+          .schema("wellness")
+          .from("running_rules")
+          .select(
+            "frequency_per_week, preferred_days, default_time, default_distance_meters, active_shoe_id, notes",
+          )
+          .maybeSingle();
+        return { rules: data ?? null };
+      },
+    }),
   };
 }

@@ -15,6 +15,8 @@ import {
   agentCreateHabit,
   agentCreateGoal,
   agentUpdateGoalStatus,
+  agentUpdateLiftingRules,
+  agentUpdateRunningRules,
 } from "@/lib/ai/mutations";
 
 export const runtime = "nodejs";
@@ -96,6 +98,20 @@ export async function POST(req: Request) {
         await agentUpdateGoalStatus(
           ctx,
           parsed.data as Parameters<typeof agentUpdateGoalStatus>[1],
+        ),
+      );
+    case "update_lifting_rules":
+      return Response.json(
+        await agentUpdateLiftingRules(
+          ctx,
+          parsed.data as Parameters<typeof agentUpdateLiftingRules>[1],
+        ),
+      );
+    case "update_running_rules":
+      return Response.json(
+        await agentUpdateRunningRules(
+          ctx,
+          parsed.data as Parameters<typeof agentUpdateRunningRules>[1],
         ),
       );
   }

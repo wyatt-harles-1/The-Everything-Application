@@ -79,6 +79,39 @@ export const updateGoalStatusInput = z.object({
 });
 export type UpdateGoalStatusInput = z.infer<typeof updateGoalStatusInput>;
 
+// Invariant #8 rules-table mutations. Partial-update semantics: a field
+// that is undefined in the payload means "leave the stored value alone";
+// an explicit null clears the column. Schemas mirror the DB CHECK
+// constraints so the model can't propose values the DB will reject.
+
+const optionalTime = z
+  .string()
+  .regex(/^[0-9]{2}:[0-9]{2}$/, "Must be HH:MM 24h")
+  .optional();
+const optionalDays = z
+  .array(z.number().int().min(1).max(7))
+  .nullable()
+  .optional();
+
+export const updateLiftingRulesInput = z.object({
+  frequency_per_week: z.number().int().min(0).max(7).optional(),
+  preferred_days: optionalDays,
+  default_time: optionalTime,
+  skip_deload: z.boolean().optional(),
+  notes: z.string().max(2000).nullable().optional(),
+});
+export type UpdateLiftingRulesInput = z.infer<typeof updateLiftingRulesInput>;
+
+export const updateRunningRulesInput = z.object({
+  frequency_per_week: z.number().int().min(0).max(7).optional(),
+  preferred_days: optionalDays,
+  default_time: optionalTime,
+  default_distance_meters: z.number().min(0).nullable().optional(),
+  active_shoe_id: z.string().uuid().nullable().optional(),
+  notes: z.string().max(2000).nullable().optional(),
+});
+export type UpdateRunningRulesInput = z.infer<typeof updateRunningRulesInput>;
+
 // Discriminated map - lets the dispatcher pick the right schema by name
 // in a type-safe way.
 export const mutationSchemas = {
@@ -88,6 +121,8 @@ export const mutationSchemas = {
   create_habit: createHabitInput,
   create_goal: createGoalInput,
   update_goal_status: updateGoalStatusInput,
+  update_lifting_rules: updateLiftingRulesInput,
+  update_running_rules: updateRunningRulesInput,
 } as const;
 
 export type MutationName = keyof typeof mutationSchemas;

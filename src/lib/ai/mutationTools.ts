@@ -14,6 +14,8 @@ import {
   createHabitInput,
   createGoalInput,
   updateGoalStatusInput,
+  updateLiftingRulesInput,
+  updateRunningRulesInput,
 } from "./mutationSchemas";
 
 export const mutationTools = {
@@ -51,5 +53,17 @@ export const mutationTools = {
     description:
       "Flip a goal's status: active / paused / achieved / abandoned. Requires approval. Pass the goal UUID from query_goals.",
     inputSchema: updateGoalStatusInput,
+  }),
+
+  update_lifting_rules: tool({
+    description:
+      "Patch the user's lifting-module rules (invariant #8). Partial update: only include the fields you want to change; absent fields keep their current value. Use this to encode runtime behavior tweaks the lifting suggestions + future automation will respect ('skip deload weeks', 'lift 4x/week', 'prefer M/W/F'). Requires approval.",
+    inputSchema: updateLiftingRulesInput,
+  }),
+
+  update_running_rules: tool({
+    description:
+      "Patch the user's running-module rules (invariant #8). Same partial-update semantics as update_lifting_rules. Sets preferred days, weekly target, default distance, and active shoe attribution for new runs. Requires approval.",
+    inputSchema: updateRunningRulesInput,
   }),
 };
