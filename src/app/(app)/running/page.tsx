@@ -11,6 +11,7 @@ import {
   formatPace,
   metersToMiles,
 } from "@/lib/running/format";
+import { CoachSaysCard } from "@/components/CoachSaysCard";
 
 export default async function RunningHubPage() {
   const supabase = await createClient();
@@ -95,6 +96,8 @@ export default async function RunningHubPage() {
           rotation live here.
         </p>
       </header>
+
+      <CoachSaysCard domain="running" />
 
       <section className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
         <p className="text-xs uppercase tracking-wider text-zinc-500 dark:text-zinc-400">

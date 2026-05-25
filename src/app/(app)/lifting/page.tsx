@@ -11,6 +11,7 @@ import {
   formatMesoStatusShort,
   type MesocycleRow,
 } from "@/lib/lifting/mesocycle";
+import { CoachSaysCard } from "@/components/CoachSaysCard";
 
 export default async function LiftingHubPage() {
   const supabase = await createClient();
@@ -68,6 +69,8 @@ export default async function LiftingHubPage() {
           flow into the timeline at /log.
         </p>
       </header>
+
+      <CoachSaysCard domain="lifting" />
 
       {activeMeso && mesoProgress ? (
         <Link

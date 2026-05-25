@@ -4,6 +4,7 @@
 import Link from "next/link";
 
 import { createClient } from "@/lib/supabase/server";
+import { CoachSaysCard } from "@/components/CoachSaysCard";
 
 import { GoalCard, type GoalForCard } from "./GoalCard";
 
@@ -58,6 +59,8 @@ export default async function GoalsIndexPage({
       >
         + New goal
       </Link>
+
+      <CoachSaysCard domain="goals" />
 
       {active.length === 0 ? (
         <p className="rounded-lg border border-dashed border-zinc-300 p-4 text-sm text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">

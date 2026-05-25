@@ -8,6 +8,7 @@ import Link from "next/link";
 
 import { createClient } from "@/lib/supabase/server";
 import { formatDate, formatDateTime, formatDuration } from "@/lib/format";
+import { CoachSaysCard } from "@/components/CoachSaysCard";
 
 type LatestSleep = {
   start_at: string;
@@ -218,6 +219,8 @@ export default async function HealthHubPage() {
           bloodwork. Each card links into the full log entry.
         </p>
       </header>
+
+      <CoachSaysCard domain="health" />
 
       <section className="space-y-2">
         <h2 className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
