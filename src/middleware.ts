@@ -15,34 +15,26 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+import { GATE_COOKIE, sha256Hex } from "@/lib/gate";
+
 export async function middleware(request: NextRequest) {
-  // Site-wide passcode gate. When SITE_PASSCODE is set (production), every
-  // request must carry HTTP Basic credentials whose password matches it —
-  // a coarse "only I can reach the site right now" lock that sits in front
-  // of the normal Supabase per-user auth. When the env var is unset (e.g.
-  // local dev), the gate is skipped entirely. The browser caches the
-  // credentials per-domain after the first prompt, so the auth callback and
-  // every later request pass through without re-prompting.
+  // Site-wide passcode gate. When SITE_PASSCODE is set (production), the
+  // user must submit the passcode at /gate, which sets a cookie carrying a
+  // SHA-256 hash of the passcode. Here we just compare the cookie's hash
+  // against a fresh hash of the env var and redirect to /gate on mismatch.
+  // /gate itself is excluded so the form is reachable. Unset env var (e.g.
+  // local dev) skips the gate entirely.
   const passcode = process.env.SITE_PASSCODE;
-  if (passcode) {
-    const header = request.headers.get("authorization");
-    let ok = false;
-    if (header?.startsWith("Basic ")) {
-      try {
-        const decoded = atob(header.slice("Basic ".length));
-        // Format is "username:password"; we only check the password, so any
-        // username works (leave it blank or type anything in the prompt).
-        const password = decoded.slice(decoded.indexOf(":") + 1);
-        ok = password === passcode;
-      } catch {
-        ok = false;
-      }
-    }
-    if (!ok) {
-      return new NextResponse("Authentication required", {
-        status: 401,
-        headers: { "WWW-Authenticate": 'Basic realm="Life Hub"' },
-      });
+  if (passcode && request.nextUrl.pathname !== "/gate") {
+    const cookieHash = request.cookies.get(GATE_COOKIE)?.value;
+    const expected = await sha256Hex(passcode);
+    if (cookieHash !== expected) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/gate";
+      url.search = `?from=${encodeURIComponent(
+        request.nextUrl.pathname + request.nextUrl.search,
+      )}`;
+      return NextResponse.redirect(url);
     }
   }
 
