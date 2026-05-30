@@ -28,6 +28,17 @@ const MUTATION_TOOL_NAMES = new Set([
   "forget_fact",
 ]);
 
+// Friendly labels for the specialist consult tools (Phase 4e7). Kept in
+// sync with SPECIALISTS in specialists.ts; this is a client component so we
+// can't import that server-only module. Unknown consult_* names fall back
+// to a generic label.
+const CONSULT_LABELS: Record<string, string> = {
+  consult_lifting: "lifting coach",
+  consult_running: "running coach",
+  consult_health: "health coach",
+  consult_goals: "goals coach",
+};
+
 export function AssistantChat({
   providerLabel,
   modelLabel,
@@ -179,8 +190,9 @@ export function AssistantChat({
       <div className="flex-1 space-y-4 px-4 py-4">
         {messages.length === 0 ? (
           <p className="rounded-lg border border-dashed border-zinc-300 p-4 text-sm text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">
-            Phase 4e1: no tools wired yet. The assistant can chat but
-            can&apos;t query your data until 4e2 lands.
+            Ask about your training, health, habits, or goals. I can read
+            across your data, consult per-domain coaches, and propose changes
+            for you to approve.
           </p>
         ) : null}
 
@@ -215,6 +227,8 @@ export function AssistantChat({
                   errorText?: string;
                 };
                 const isMutation = MUTATION_TOOL_NAMES.has(toolName);
+                const isConsult = toolName.startsWith("consult_");
+                const consultLabel = CONSULT_LABELS[toolName] ?? "specialist";
                 const awaitingApproval =
                   isMutation && part.state === "input-available";
                 const running =
@@ -245,21 +259,38 @@ export function AssistantChat({
                         className={
                           isMutation
                             ? "font-medium text-violet-700 dark:text-violet-300"
-                            : ""
+                            : isConsult
+                              ? "font-medium text-sky-700 dark:text-sky-300"
+                              : ""
                         }
                       >
-                        {toolName}
+                        {isConsult
+                          ? running
+                            ? `Consulting ${consultLabel}…`
+                            : `${consultLabel} consulted`
+                          : toolName}
                       </span>
                       {awaitingApproval ? " · awaiting approval" : null}
                       {part.state === "output-error" ? " · error" : null}
                     </summary>
 
                     {/* Always show the input args - especially for mutations
-                        so the human sees exactly what's being proposed. */}
+                        so the human sees exactly what's being proposed. For a
+                        consult, the input is just the sub-question; render it
+                        as quoted text instead of raw JSON. */}
                     {part.input !== undefined ? (
-                      <pre className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap break-words text-[10px] text-zinc-700 dark:text-zinc-300">
-                        {JSON.stringify(part.input, null, 2)}
-                      </pre>
+                      isConsult ? (
+                        <p className="mt-1 text-[10px] italic text-zinc-600 dark:text-zinc-400">
+                          “
+                          {(part.input as { question?: string }).question ??
+                            ""}
+                          ”
+                        </p>
+                      ) : (
+                        <pre className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap break-words text-[10px] text-zinc-700 dark:text-zinc-300">
+                          {JSON.stringify(part.input, null, 2)}
+                        </pre>
+                      )
                     ) : null}
 
                     {awaitingApproval ? (
@@ -292,9 +323,13 @@ export function AssistantChat({
                     ) : null}
 
                     {part.state === "output-available" ? (
-                      <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap break-words text-[10px] text-zinc-600 dark:text-zinc-400">
-                        {JSON.stringify(part.output, null, 2)}
-                      </pre>
+                      isConsult ? (
+                        <ConsultOutput output={part.output} />
+                      ) : (
+                        <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap break-words text-[10px] text-zinc-600 dark:text-zinc-400">
+                          {JSON.stringify(part.output, null, 2)}
+                        </pre>
+                      )
                     ) : part.state === "output-error" ? (
                       <p className="mt-1 text-[10px] text-red-600 dark:text-red-400">
                         {part.errorText ?? "unknown error"}
@@ -335,6 +370,40 @@ export function AssistantChat({
           </button>
         </form>
       </footer>
+    </div>
+  );
+}
+
+// Renders a specialist consult result: the expert finding as prose plus any
+// concrete proposals the specialist recommended. The master surfaces those
+// proposals as its own approve/reject mutation cards further down the turn.
+function ConsultOutput({ output }: { output: unknown }) {
+  const o = (output ?? {}) as {
+    finding?: string;
+    error?: string;
+    proposals?: { action: string; rationale: string }[];
+  };
+  return (
+    <div className="mt-1 space-y-1">
+      {o.error ? (
+        <p className="text-[11px] text-red-600 dark:text-red-400">{o.error}</p>
+      ) : (
+        <p className="whitespace-pre-wrap text-[11px] text-zinc-700 dark:text-zinc-300">
+          {o.finding}
+        </p>
+      )}
+      {o.proposals && o.proposals.length > 0 ? (
+        <div className="text-[10px] text-zinc-500 dark:text-zinc-400">
+          <span className="font-medium">Proposed:</span>
+          <ul className="ml-3 list-disc">
+            {o.proposals.map((p, i) => (
+              <li key={i}>
+                <code>{p.action}</code> — {p.rationale}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
     </div>
   );
 }

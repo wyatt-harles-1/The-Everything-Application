@@ -21,6 +21,7 @@ import {
   AINotConfiguredError,
 } from "@/lib/ai/provider";
 import { buildReadTools } from "@/lib/ai/tools";
+import { buildSpecialistTools } from "@/lib/ai/specialists";
 import { mutationTools } from "@/lib/ai/mutationTools";
 import {
   appendMessages,
@@ -51,6 +52,14 @@ MUTATION TOOLS (require the USER to approve in the UI before committing):
 - update_lifting_rules / update_running_rules: partial-update the module rules table (invariant #8).
 - remember_fact: save a short factual statement that persists across chat sessions. Use sparingly - only stable preferences/facts that change advice in future conversations.
 - forget_fact: delete a stored memory by id.
+
+SPECIALIST SUB-AGENTS (you command these; they auto-execute and return a finding + optional proposals):
+- consult_lifting / consult_running / consult_health / consult_goals: delegate a domain question to a focused coach sub-agent. It reads that domain deeply and returns an expert finding, plus any concrete change "proposals".
+- Delegate genuinely analytical or cross-cutting questions ("analyze my lifting progress and what's lagging", "how's my recovery this week"). For a single fact ("what's my bench PR"), use the direct read tools - don't delegate.
+- When a question spans multiple domains, call several consult_* tools IN THE SAME step so they run in parallel.
+- Specialists can't see this chat. Put everything they need into the self-contained "question" you pass them.
+- A specialist's "proposals" are recommendations, not actions. To act on one, YOU call the matching mutation tool (e.g. update_lifting_rules) with that proposal's input, and tell the user which coach suggested it. The usual approve/reject gate then applies. Never claim a specialist changed anything itself.
+- Synthesize specialist findings into your own concise answer; don't just echo them.
 
 Rules of engagement:
 - Wyatt prefers terse, direct answers over warm ones. No "Great question!" preambles.
@@ -108,10 +117,11 @@ export async function POST(req: Request) {
   }
 
   // Memory injection: fetch all facts the agent should remember about
-  // the user and append to the base system prompt.
+  // the user and append to the base system prompt. The same memory block
+  // is threaded into the specialists so they share the user's context.
   const memories = await listMemories(supabase);
-  const systemPrompt =
-    BASE_SYSTEM_PROMPT + formatMemoriesForPrompt(memories);
+  const memoryBlock = formatMemoriesForPrompt(memories);
+  const systemPrompt = BASE_SYSTEM_PROMPT + memoryBlock;
 
   const modelMessages = await convertToModelMessages(body.messages ?? []);
 
@@ -122,9 +132,13 @@ export async function POST(req: Request) {
     messages: modelMessages,
     tools: {
       ...buildReadTools(supabase),
+      ...buildSpecialistTools(supabase, model, memoryBlock),
       ...mutationTools,
     },
-    stopWhen: stepCountIs(8),
+    // Higher than the single-agent budget (was 8): a turn may consult
+    // multiple specialists and then relay their proposals as mutations.
+    // The specialists' own internal steps don't count against this.
+    stopWhen: stepCountIs(12),
     onFinish: async ({ response }) => {
       // Persist every new assistant message produced this turn. The
       // response.messages array carries assistant turns AND tool-result

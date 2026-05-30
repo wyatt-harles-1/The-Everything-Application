@@ -16,6 +16,7 @@ import { tool } from "ai";
 import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import type { CoachDomain } from "./coach";
 import {
   computeMesoProgress,
   type MesocycleRow,
@@ -547,4 +548,36 @@ export function buildReadTools(supabase: SupabaseClient) {
       },
     }),
   };
+}
+
+// Which read tools each specialist sub-agent gets (Phase 4e7). The master
+// agent keeps the full set above; a specialist only sees its domain's slice
+// so it stays focused and picks the right tool. query_workouts deliberately
+// appears under both lifting and running since it's the parent-workout read
+// for either kind. These are names into buildReadTools, so there's exactly
+// one definition per tool - no drift between the master and the specialists.
+type ReadToolName = keyof ReturnType<typeof buildReadTools>;
+
+const DOMAIN_READ_TOOL_NAMES: Record<CoachDomain, ReadToolName[]> = {
+  lifting: [
+    "query_workouts",
+    "get_lift_pr",
+    "get_active_mesocycle",
+    "get_lifting_rules",
+  ],
+  running: ["query_workouts", "query_recent_runs", "get_running_rules"],
+  health: ["query_sleep", "query_mood"],
+  goals: ["query_goals", "query_habits"],
+};
+
+// Build the scoped read-tool subset for one specialist domain. We construct
+// the full tool object (cheap - no DB calls happen until a tool executes)
+// and pick the domain's slice by name, so the definitions never diverge.
+export function buildDomainReadTools(
+  supabase: SupabaseClient,
+  domain: CoachDomain,
+) {
+  const all = buildReadTools(supabase);
+  const names = DOMAIN_READ_TOOL_NAMES[domain];
+  return Object.fromEntries(names.map((n) => [n, all[n]]));
 }
