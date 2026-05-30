@@ -7,7 +7,7 @@
 > checklists and the **Current focus** section as work lands, so this file is always the handoff
 > point between sessions.
 
-**Last updated:** 2026-05-25
+**Last updated:** 2026-05-29
 
 ---
 
@@ -68,7 +68,8 @@ schemas must also be added to `supabase/config.toml`'s `api.schemas` array.
 - **Data/Auth:** Supabase (Postgres + Auth), Row Level Security, email OTP sign-in
 - **AI:** Vercel AI SDK (`ai` v6) with bring-your-own-key support for Anthropic, OpenAI, Google,
   Mistral, and Groq
-- **Tooling:** pnpm, Supabase CLI + Docker for local dev
+- **Tooling:** pnpm, Supabase CLI (migrations via `db push`). Dev runs against the hosted
+  Supabase project; Docker is optional, only for the local `supabase start` stack
 - **Hosting:** Vercel (auto-deploys on push to `main`), hosted Supabase, Resend for auth email
 - **CI:** GitHub Actions runs typecheck → lint → build on every push to `main` (required to merge)
 
@@ -104,6 +105,10 @@ See `README.md` for setup and day-to-day commands.
   - Chat persistence + thread list (`/assistant/threads`)
   - Cross-session assistant memory (`/assistant/memory`)
   - Per-domain "Coach says" advice cards on the module hubs (Phase 4e6)
+- **Operational lock:** site-wide passcode gate at `/gate` — controlled by the `SITE_PASSCODE`
+  env var, custom Life Hub-styled passcode page, HttpOnly + Secure cookie holds a SHA-256 hash
+  (cleartext never stored), sits in front of Supabase auth. Toggle on/off by setting or removing
+  the env var in Vercel.
 
 ### 🔭 Wanted but not started
 
@@ -126,7 +131,12 @@ See `README.md` for setup and day-to-day commands.
   `pnpm/action-setup@v4` run on Node 20, which GitHub deprecates **2026-06-02**. Bump before then.
 - **Deployment hardening:** no separate preview database (previews share prod), no DMARC record,
   no uptime/monitoring on `/api/health`.
-- **Coach cards** (Phase 4e6) are committed + CI-green but **not yet manually tested in a browser**.
+- **Coach cards** (Phase 4e6) — code is on prod and the migration is applied to the hosted DB,
+  but the cards have **not yet been manually tested in a browser**. Just needs a hub page visit
+  while signed in with a provider configured.
+- **Preview environment** of the passcode gate isn't set yet — the Vercel CLI looped on the
+  "all preview branches" command; add `SITE_PASSCODE` to Preview manually in the Vercel dashboard
+  before spinning up any preview branch.
 
 ---
 
@@ -151,17 +161,26 @@ See `README.md` for setup and day-to-day commands.
 
 ## 7. Current focus — pick up here
 
-**Just landed:** Phase 4e6 — per-domain "Coach says" cards on the lifting/running/health/goals hubs.
-Committed (`c95962b`) and pushed to `main`; CI passed (typecheck/lint/build all green).
+**Just landed (since 2026-05-25):**
+- Phase 4e6 — per-domain "Coach says" cards (`c95962b`), pushed to `main`, CI green, and the
+  `shared.coach_advice` migration is now applied to the **hosted DB** as well as local.
+- Site-wide passcode gate at `/gate` (`2ef5138`). First attempt used HTTP Basic (`8dbe814`) but
+  the native browser dialog was inconsistent across browsers, so it was swapped for an in-app
+  passcode page with an HttpOnly cookie. Verified end-to-end on prod. `SITE_PASSCODE` is set in
+  Vercel **Production** only — Preview still needs to be set in the Vercel dashboard.
 
-**Not yet done on 4e6:** manual browser test. Needs Docker Desktop running, then
-`pnpm exec supabase start` (applies the new `coach_advice` migration) + `pnpm dev`, and the
-assistant provider configured at `/assistant/settings` for the cards to generate advice.
+**Open follow-ups:**
+- Coach cards still **not manually tested in a browser**. Easiest path: go to `projectkosmos.com`,
+  pass the gate, sign in, open any hub page (`/lifting`, `/running`, `/health`, `/goals`), and
+  confirm the card generates advice (provider must be configured at `/assistant/settings`).
+- Add `SITE_PASSCODE` to Vercel **Preview** environment via the dashboard (CLI bug; ~30s in UI).
 
 **Decision pending — what's next:**
 - (a) Finish the Phase 4e AI vision: the master agent that commands per-module specialist agents, or
 - (b) Move to Phase 5 integrations (Strava first?), or
-- (c) Circle back to tech debt (timezone pass, bump GitHub Actions before 2026-06-02).
+- (c) Circle back to tech debt (timezone pass, bump GitHub Actions before **2026-06-02**), or
+- (d) Bump GitHub Actions to Node-24-compatible versions specifically — deadline is **one week
+  away (2026-06-02)** so this is the most time-sensitive item.
 
 _Update this section at the end of each session so the next one starts here._
 

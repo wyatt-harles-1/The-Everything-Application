@@ -19,11 +19,12 @@ assistant that can read and act across every module.
 | --- | --- | --- |
 | **Node 20+** | Runs the Next.js dev server | https://nodejs.org/ |
 | **pnpm** | Package manager | `iwr https://get.pnpm.io/install.ps1 -useb \| iex` (Windows) |
-| **Docker Desktop** | Hosts the local Supabase stack | https://www.docker.com/products/docker-desktop/ |
-| **Supabase CLI** | Manages migrations + local stack | https://github.com/supabase/cli/releases (Windows binary) or `scoop install supabase` |
+| **Supabase CLI** | Manages + pushes migrations | https://github.com/supabase/cli/releases (Windows binary) or `scoop install supabase` |
 | **Git** | Version control | https://git-scm.com/ |
 
-> **Docker Desktop must be running** before `supabase start`.
+> **Docker is not required.** This project develops directly against the **hosted**
+> Supabase project. Docker Desktop is only needed if you choose to run the optional
+> local Supabase stack (`supabase start`) — see [Optional: local Supabase](#optional-local-supabase-stack).
 
 ---
 
@@ -39,15 +40,15 @@ pnpm install
 # 3. Copy the env template
 Copy-Item .env.example .env.local
 
-# 4. Start the local Supabase stack (Postgres + Studio + Auth, all in Docker)
-supabase start
-#  → prints API URL, anon key, and service_role key.
-#  → Studio is at http://localhost:54323
+# 4. Fill in .env.local from the hosted Supabase project:
+#      Dashboard → your project → Project Settings → API
+#      "Project URL"      → NEXT_PUBLIC_SUPABASE_URL
+#      "anon public" key  → NEXT_PUBLIC_SUPABASE_ANON_KEY
+#      "service_role" key → SUPABASE_SERVICE_ROLE_KEY
 
-# 5. Paste those three values into .env.local:
-#      NEXT_PUBLIC_SUPABASE_URL=<API URL>
-#      NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon key>
-#      SUPABASE_SERVICE_ROLE_KEY=<service_role key>
+# 5. Link the CLI to the hosted project (one-time, so `supabase db push` knows
+#    where to send migrations). Grab the ref from the dashboard URL.
+supabase link --project-ref <your-project-ref>
 
 # 6. Run the dev server
 pnpm dev
@@ -60,14 +61,10 @@ pnpm dev
 ## Day-to-day commands
 
 ```powershell
-# Reset the local database (drops everything, re-applies all migrations,
-# re-runs seed.sql). Use this whenever you want a clean slate.
-supabase db reset
-
 # Create a new migration (creates a timestamped SQL file in supabase/migrations/)
 supabase migration new <descriptive_name>
 
-# Push committed migrations to the hosted Supabase project
+# Push committed migrations to the hosted Supabase project (no Docker needed)
 supabase db push
 
 # Lint and type-check
@@ -76,6 +73,32 @@ pnpm typecheck
 
 # Production build (smoke test)
 pnpm build
+```
+
+> Schema changes still go **only** through a migration file + `supabase db push` —
+> never by editing tables in the Supabase dashboard (that causes drift).
+
+---
+
+## Optional: local Supabase stack
+
+You don't need this for normal development — the steps above run entirely against
+the hosted project. But if you ever want an offline, throwaway database (e.g. to
+test a destructive migration without touching real data), the Supabase CLI can run
+the whole stack locally **in Docker**.
+
+```powershell
+# Requires Docker Desktop installed and running.
+supabase start
+#  → prints a local API URL, anon key, and service_role key.
+#  → Studio is at http://localhost:54323
+#  Paste the printed values into .env.local to point the app at the local stack.
+
+# Reset the local DB: drops everything, re-applies all migrations, re-runs seed.sql.
+supabase db reset
+
+# Stop the local stack when done.
+supabase stop
 ```
 
 ---
