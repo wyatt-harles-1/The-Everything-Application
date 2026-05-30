@@ -137,6 +137,11 @@ export default async function RunningHubPage() {
               : "track mileage"
           }
         />
+        <HubCard
+          href="/integrations"
+          label="Integrations"
+          sublabel="sync from Strava"
+        />
       </section>
 
       <section className="space-y-3">

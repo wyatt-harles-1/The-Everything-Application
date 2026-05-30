@@ -7,7 +7,7 @@
 > checklists and the **Current focus** section as work lands, so this file is always the handoff
 > point between sessions.
 
-**Last updated:** 2026-05-29
+**Last updated:** 2026-05-30
 
 ---
 
@@ -97,7 +97,7 @@ See `README.md` for setup and day-to-day commands.
   block, habits, top goals, quick-log, recent activity.
 - **Running module (Phase 4d):** running-specific logging + hub with weekly mileage/pace.
 - **Health hub (Phase 4d):** sleep/mood/body/medication overview.
-- **AI assistant (Phase 4e, in progress — most of it shipped):**
+- **AI assistant (Phase 4e — complete):**
   - Multi-provider chat with bring-your-own-key or managed key (`/assistant`, `/assistant/settings`)
   - Read-only tools across domains (summaries, metrics, PRs, mesocycle, module rules)
   - Mutation tools with per-action approval gates
@@ -105,6 +105,18 @@ See `README.md` for setup and day-to-day commands.
   - Chat persistence + thread list (`/assistant/threads`)
   - Cross-session assistant memory (`/assistant/memory`)
   - Per-domain "Coach says" advice cards on the module hubs (Phase 4e6)
+  - **Master/specialist multi-agent (Phase 4e7):** the master can delegate to four
+    `consult_*` coach sub-agents (lifting/running/health/goals) via the agents-as-tools
+    pattern. Specialists are read-only domain experts that return a finding plus concrete
+    `propose_action` recommendations; the master relays any proposal through the existing
+    approve/reject gate, so RLS + human-in-the-loop stay intact. See `src/lib/ai/specialists.ts`.
+- **Integrations — Strava (Phase 5 Wave 1):** OAuth connect + on-demand **"Sync now"** at
+  `/integrations`. Imports all cardio types (run/ride/swim/walk → workouts + cardio_sessions,
+  others → bare workout) onto the universal timeline, tagged to a `provider='strava'` source.
+  Tokens stored encrypted in `sources.config` (reuses `encryption.ts` + `AI_SETTINGS_MASTER_KEY`);
+  idempotent via a `(source_id, external_id)` unique index. Auto-sync (webhooks/cron) is the next
+  wave. Code: `src/lib/integrations/{strava,sources}.ts`, `src/app/api/integrations/strava/*`,
+  `src/app/(app)/integrations/*`.
 - **Operational lock:** site-wide passcode gate at `/gate` — controlled by the `SITE_PASSCODE`
   env var, custom Life Hub-styled passcode page, HttpOnly + Secure cookie holds a SHA-256 hash
   (cleartext never stored), sits in front of Supabase auth. Toggle on/off by setting or removing
@@ -112,10 +124,8 @@ See `README.md` for setup and day-to-day commands.
 
 ### 🔭 Wanted but not started
 
-- **Finish the AI vision (rest of Phase 4e):** today the assistant is a *single* agent with a
-  cross-domain tool surface. The intended end state is a **master agent that commands per-module
-  specialist agents**. Not built yet.
-- **Wellness integrations (Phase 5):** Strava, Cronometer, Apple Health auto-sync.
+- **Wellness integrations (Phase 5) — remaining:** Strava **auto-sync** (webhooks or cron; Wave 1
+  is manual "Sync now"); Cronometer and Apple Health connectors.
 - **Bloodwork module + AI doctor:** tables exist; the module UI and AI interpretation don't.
 - **Finance domain + AI financial advisor:** Plaid sync, `finance` schema, advisor agent.
 - **Knowledge domain:** reserved, undefined.
@@ -149,39 +159,46 @@ See `README.md` for setup and day-to-day commands.
 | 1.5 | Deployment wiring | ✅ |
 | 2 | Manual logging UI + wellness tables | ✅ |
 | 3 | Weightlifting module | ✅ ("good enough for now") |
-| **4** | **Base Life Hub features** (current) | 🚧 mostly done |
+| **4** | **Base Life Hub features** (current) | ✅ complete |
 | · 4a | Scheduler/planner + habits | ✅ |
 | · 4b | Personal goals UI | ✅ |
 | · 4c | Main dashboard redesign | ✅ |
 | · 4d | Module priority pass (running, health) | ✅ |
-| · 4e | AI assistant (chat → tools → memory → coach → multi-agent) | 🚧 multi-agent remains |
-| 5 | Wellness integrations (Strava, Cronometer, Apple Health) | ⬜ |
+| · 4e | AI assistant (chat → tools → memory → coach → multi-agent) | ✅ |
+| **5** | **Wellness integrations (Strava, Cronometer, Apple Health)** (current) | 🚧 Strava Wave 1 done |
+| · 5a | Strava: OAuth connect + manual "Sync now" | ✅ |
+| · 5b | Strava auto-sync (webhooks or cron) | ⬜ |
+| · 5c | Cronometer, Apple Health connectors | ⬜ |
 | 6+ | Bloodwork + AI doctor, Finance + AI advisor, knowledge, extraction | ⬜ |
 
 ---
 
 ## 7. Current focus — pick up here
 
-**Just landed (since 2026-05-25):**
-- Phase 4e6 — per-domain "Coach says" cards (`c95962b`), pushed to `main`, CI green, and the
-  `shared.coach_advice` migration is now applied to the **hosted DB** as well as local.
-- Site-wide passcode gate at `/gate` (`2ef5138`). First attempt used HTTP Basic (`8dbe814`) but
-  the native browser dialog was inconsistent across browsers, so it was swapped for an in-app
-  passcode page with an HttpOnly cookie. Verified end-to-end on prod. `SITE_PASSCODE` is set in
-  Vercel **Production** only — Preview still needs to be set in the Vercel dashboard.
+**Just landed (this session, 2026-05-30):**
+- **Phase 5 Wave 1 — Strava integration (connect + manual sync).** `/integrations` page with
+  OAuth connect, "Sync now", and disconnect. New migration `20260530000000_workouts_external_id.sql`
+  (idempotency). New `src/lib/integrations/{strava,sources}.ts`, OAuth routes under
+  `src/app/api/integrations/strava/`, actions + page under `src/app/(app)/integrations/`. Linked
+  from the running hub + dashboard. Typecheck + lint + build green. **Not yet committed or pushed;
+  migration not yet `db push`-ed.**
+- Phase 4e7 master/specialist multi-agent (`src/lib/ai/specialists.ts`) — completed Phase 4.
+- GitHub Actions bumped off node20 (`31123c4`, pushed, CI green). Docker now optional (hosted dev).
 
-**Open follow-ups:**
-- Coach cards still **not manually tested in a browser**. Easiest path: go to `projectkosmos.com`,
-  pass the gate, sign in, open any hub page (`/lifting`, `/running`, `/health`, `/goals`), and
-  confirm the card generates advice (provider must be configured at `/assistant/settings`).
-- Add `SITE_PASSCODE` to Vercel **Preview** environment via the dashboard (CLI bug; ~30s in UI).
+**Open follow-ups / to finish Wave 1:**
+- **Set up the Strava app + env vars** (external, user): register at strava.com/settings/api →
+  `STRAVA_CLIENT_ID` / `STRAVA_CLIENT_SECRET`; ensure `AI_SETTINGS_MASTER_KEY` is set (now also
+  encrypts integration tokens). Set Strava's Authorization Callback Domain to the test host.
+- `supabase db push` the new migration to the hosted DB.
+- **Manual E2E** once creds exist: connect → "Sync now" → runs/rides appear on `/running` +
+  timeline tagged to the Strava source; re-sync shows skipped (no dupes); disconnect keeps history.
+- Still untested in a browser from prior sessions: multi-agent assistant, Phase 4e6 coach cards.
+- Add `SITE_PASSCODE` to Vercel **Preview** env (dashboard).
 
-**Decision pending — what's next:**
-- (a) Finish the Phase 4e AI vision: the master agent that commands per-module specialist agents, or
-- (b) Move to Phase 5 integrations (Strava first?), or
-- (c) Circle back to tech debt (timezone pass, bump GitHub Actions before **2026-06-02**), or
-- (d) Bump GitHub Actions to Node-24-compatible versions specifically — deadline is **one week
-  away (2026-06-02)** so this is the most time-sensitive item.
+**Decision pending — what's next after Wave 1 verified:**
+- (a) **Strava auto-sync (5b)** — webhooks or Vercel cron, or
+- (b) Next connector (Cronometer / Apple Health), or
+- (c) Tech debt: timezone-aware pass, deployment hardening (preview DB, DMARC, health monitoring).
 
 _Update this section at the end of each session so the next one starts here._
 

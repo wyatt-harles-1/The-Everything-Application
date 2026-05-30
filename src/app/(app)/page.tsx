@@ -317,6 +317,7 @@ export default async function HomePage() {
           <QuickLink href="/running" label="Running" />
           <QuickLink href="/health" label="Health" />
           <QuickLink href="/assistant" label="Assistant" />
+          <QuickLink href="/integrations" label="Integrations" />
         </div>
       </section>
 
