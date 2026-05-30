@@ -6,7 +6,11 @@
 # protection requires this check.
 #
 # Notes on choices:
-#   - Node 24 matches Vercel's runtime (see Vercel project settings).
+#   - Node 24 matches Vercel's runtime (see Vercel project settings). This is the
+#     Node we BUILD with (`node-version: '24'`).
+#   - The action versions (checkout@v5, setup-node@v5, action-setup@v6) are pinned
+#     to majors that ship a node24 *action runtime*. GitHub deprecated the node20
+#     runtime on 2026-06-02; don't downgrade these below those majors.
 #   - pnpm version is pinned via the `packageManager` field in package.json
 #     so CI never drifts from local. setup-pnpm reads that field
 #     automatically — no explicit version flag here.
@@ -28,13 +32,13 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
 
       - name: Setup Node 24
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: '24'
           cache: 'pnpm'

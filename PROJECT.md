@@ -127,8 +127,9 @@ See `README.md` for setup and day-to-day commands.
 
 - **Timezone handling.** Several places (dashboard "today" bounds, `coach.ts` `isoToday`, greeting)
   use server-local time. Fine for US use and daily granularity; a TZ-aware pass is deferred.
-- **GitHub Actions on Node 20.** `actions/checkout@v4`, `actions/setup-node@v4`,
-  `pnpm/action-setup@v4` run on Node 20, which GitHub deprecates **2026-06-02**. Bump before then.
+- ~~**GitHub Actions on Node 20.**~~ ✅ Resolved 2026-05-30 — bumped to `actions/checkout@v5`,
+  `actions/setup-node@v5`, `pnpm/action-setup@v6` (all on the node24 action runtime), ahead of
+  GitHub's **2026-06-02** deprecation.
 - **Deployment hardening:** no separate preview database (previews share prod), no DMARC record,
   no uptime/monitoring on `/api/health`.
 - **Coach cards** (Phase 4e6) — code is on prod and the migration is applied to the hosted DB,
