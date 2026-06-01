@@ -7,7 +7,7 @@
 > checklists and the **Current focus** section as work lands, so this file is always the handoff
 > point between sessions.
 
-**Last updated:** 2026-05-30
+**Last updated:** 2026-06-01
 
 ---
 
@@ -125,7 +125,9 @@ See `README.md` for setup and day-to-day commands.
 ### 🔭 Wanted but not started
 
 - **Wellness integrations (Phase 5) — remaining:** Strava **auto-sync** (webhooks or cron; Wave 1
-  is manual "Sync now"); Cronometer and Apple Health connectors.
+  is manual "Sync now"); more **cloud-API** connectors (Oura/Fitbit/Withings for sleep, HR, weight);
+  on-device hubs (Apple Health / Google Health Connect / Samsung) need a **companion app** — see
+  the Integrations strategy note above.
 - **Bloodwork module + AI doctor:** tables exist; the module UI and AI interpretation don't.
 - **Finance domain + AI financial advisor:** Plaid sync, `finance` schema, advisor agent.
 - **Knowledge domain:** reserved, undefined.
@@ -149,6 +151,36 @@ See `README.md` for setup and day-to-day commands.
   "all preview branches" command; add `SITE_PASSCODE` to Preview manually in the Vercel dashboard
   before spinning up any preview branch.
 
+### 🔌 Integrations strategy (how Phase 5+ sources connect)
+
+The decision that shapes the whole integrations roadmap: **health data sources split into two
+camps, and only one is reachable from a web backend.**
+
+1. **Cloud-API services** — expose an OAuth web API we can pull from Life Hub's server, exactly
+   like Strava. These are the ones we build server-side connectors for:
+   - **Strava** — workouts/activities (✅ connected). Not an everything-aggregator, but it *does*
+     aggregate workouts: Garmin / Apple Watch / Wahoo / Peloton etc. push activities into Strava,
+     so it's the single best source for **training**. It has no sleep / nutrition / body / all-day HR.
+   - **Oura, Whoop, Fitbit** — sleep, recovery, HR (good web APIs).
+   - **Withings** — body weight, BP, sleep.
+   - **Garmin** — comprehensive, but partner-approval required.
+   - **Cronometer** — nutrition, but the API is gated/partner.
+
+2. **On-device platforms — NO web API exists** (the big gotcha):
+   - **Apple Health (HealthKit)** — iOS, data lives on the phone; no server endpoint.
+   - **Google** — Fit's REST API was deprecated; its successor **Health Connect** is on-device Android only.
+   - **Samsung Health** — on-device Android SDK, partner-only.
+   These are exactly the aggregators we'd want, but they can only be reached by a **companion
+   mobile app** (native / React Native) that reads HealthKit / Health Connect and pushes to our
+   API — a separate project. The only no-code fallback is manual export/import (e.g. the Apple
+   Health XML zip).
+
+**Implication:** there is no single magic source to "pull everything" from server-side. Life Hub
+gets **one connector per data domain**, each from the best cloud-API service (workouts → Strava,
+sleep/HR → Oura/Fitbit, weight → Withings, …). The `shared.sources` + universal `events` design
+already makes each new connector mechanical — it's just another source row feeding the same tables.
+Apple/Google/Samsung are a *later* companion-app effort, not a quick OAuth connector.
+
 ---
 
 ## 6. Phase roadmap
@@ -165,39 +197,35 @@ See `README.md` for setup and day-to-day commands.
 | · 4c | Main dashboard redesign | ✅ |
 | · 4d | Module priority pass (running, health) | ✅ |
 | · 4e | AI assistant (chat → tools → memory → coach → multi-agent) | ✅ |
-| **5** | **Wellness integrations (Strava, Cronometer, Apple Health)** (current) | 🚧 Strava Wave 1 done |
-| · 5a | Strava: OAuth connect + manual "Sync now" | ✅ |
+| **5** | **Wellness integrations** (current) | 🚧 Strava live |
+| · 5a | Strava: OAuth connect + manual "Sync now" | ✅ verified in prod |
 | · 5b | Strava auto-sync (webhooks or cron) | ⬜ |
-| · 5c | Cronometer, Apple Health connectors | ⬜ |
+| · 5c | More cloud-API connectors (Oura/Fitbit → sleep+HR, Withings → weight, Cronometer → nutrition) | ⬜ |
+| · 5d | On-device hubs (Apple Health / Google Health Connect / Samsung) — needs a companion app | ⬜ |
 | 6+ | Bloodwork + AI doctor, Finance + AI advisor, knowledge, extraction | ⬜ |
 
 ---
 
 ## 7. Current focus — pick up here
 
-**Just landed (this session, 2026-05-30):**
-- **Phase 5 Wave 1 — Strava integration (connect + manual sync).** `/integrations` page with
-  OAuth connect, "Sync now", and disconnect. New migration `20260530000000_workouts_external_id.sql`
-  (idempotency). New `src/lib/integrations/{strava,sources}.ts`, OAuth routes under
-  `src/app/api/integrations/strava/`, actions + page under `src/app/(app)/integrations/`. Linked
-  from the running hub + dashboard. Typecheck + lint + build green. **Not yet committed or pushed;
-  migration not yet `db push`-ed.**
-- Phase 4e7 master/specialist multi-agent (`src/lib/ai/specialists.ts`) — completed Phase 4.
-- GitHub Actions bumped off node20 (`31123c4`, pushed, CI green). Docker now optional (hosted dev).
+**Just landed:**
+- **Phase 5 Wave 1 — Strava integration is LIVE and verified in prod.** OAuth connect + manual
+  "Sync now" at `/integrations`. Committed (`28a2e21`), pushed, CI green, migration
+  `20260530000000_workouts_external_id.sql` applied to the hosted DB, Strava app registered
+  (client id `253419`), env vars set in Vercel, and the connect → sync flow **confirmed working**.
+- Recorded the **Integrations strategy** (cloud-API vs on-device platforms) in §5 and reshaped the
+  Phase 5 roadmap: 5c = more cloud-API connectors, 5d = on-device hubs need a companion app.
+- Earlier this phase-block: Phase 4e7 multi-agent (`aa3e0dd`), GitHub Actions off node20, Docker optional.
 
-**Open follow-ups / to finish Wave 1:**
-- **Set up the Strava app + env vars** (external, user): register at strava.com/settings/api →
-  `STRAVA_CLIENT_ID` / `STRAVA_CLIENT_SECRET`; ensure `AI_SETTINGS_MASTER_KEY` is set (now also
-  encrypts integration tokens). Set Strava's Authorization Callback Domain to the test host.
-- `supabase db push` the new migration to the hosted DB.
-- **Manual E2E** once creds exist: connect → "Sync now" → runs/rides appear on `/running` +
-  timeline tagged to the Strava source; re-sync shows skipped (no dupes); disconnect keeps history.
-- Still untested in a browser from prior sessions: multi-agent assistant, Phase 4e6 coach cards.
+**Open follow-ups:**
+- Still untested in a browser from prior sessions: multi-agent assistant (`/assistant`), Phase 4e6
+  coach cards (hub pages).
 - Add `SITE_PASSCODE` to Vercel **Preview** env (dashboard).
 
-**Decision pending — what's next after Wave 1 verified:**
-- (a) **Strava auto-sync (5b)** — webhooks or Vercel cron, or
-- (b) Next connector (Cronometer / Apple Health), or
+**Decision pending — what's next:**
+- (a) **Strava auto-sync (5b)** — webhooks or Vercel cron (so runs sync without a button press), or
+- (b) **Next cloud-API connector (5c)** — Oura or Fitbit (sleep/HR) is the highest-value add since
+  Strava covers training but nothing recovery-side, or
 - (c) Tech debt: timezone-aware pass, deployment hardening (preview DB, DMARC, health monitoring).
 
 _Update this section at the end of each session so the next one starts here._
