@@ -69,7 +69,7 @@ const SPECIALISTS: SpecialistConfig[] = [
     toolName: "consult_health",
     label: "health coach",
     consultDescription:
-      "Delegate a recovery/health question to the user's health-coach sub-agent. It reads recent sleep and mood, and can propose a new habit or a health goal. Returns a concise finding plus any proposals. Use for analytical questions about sleep, mood, recovery, or consistency. Pass a self-contained question.",
+      "Delegate a recovery/health question to the user's health-coach sub-agent. It reads recent sleep, mood, and Oura recovery (readiness score, HRV, resting HR), and can propose a new habit or a health goal. Returns a concise finding plus any proposals. Use for analytical questions about sleep, recovery, mood, or consistency — including correlating recovery against training. Pass a self-contained question.",
     allowedActions: ["create_habit", "create_goal"],
   },
   {

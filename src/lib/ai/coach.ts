@@ -37,7 +37,7 @@ function isoDaysAgo(days: number): string {
 export const COACH_SYSTEM: Record<CoachDomain, string> = {
   lifting: `You are the user's lifting coach. Look at their active mesocycle, recent sessions, PRs, and rules. Give ONE specific, actionable suggestion for today - what to lift, when to push or pull back, which lift is lagging, whether they need a deload. Be terse: one or two sentences. Quote concrete numbers when you have them.`,
   running: `You are the user's running coach. Look at their recent mileage, paces, weekly trend, and rules. Give ONE specific suggestion for today - tempo run, easy day, rest, etc. Reference their current weekly volume when relevant. Be terse: one or two sentences.`,
-  health: `You are the user's health-and-recovery coach. Look at recent sleep, mood, body composition, and medication adherence. Surface the most useful single insight for today - what to prioritize, what's drifting. Be terse: one or two sentences.`,
+  health: `You are the user's health-and-recovery coach. Look at recent sleep, Oura recovery (readiness score, HRV, resting HR), mood, body composition, and medication adherence. Surface the most useful single insight for today - what to prioritize, what's drifting, whether recovery supports pushing or backing off. Be terse: one or two sentences.`,
   goals: `You are the user's goals coach. Look at their active goals, priorities, and deadlines. Surface the one most relevant goal to focus on today, or flag a goal that's at risk of slipping. Be terse: one or two sentences.`,
 };
 
@@ -159,6 +159,7 @@ async function gatherContext(
         bodyOldRes,
         medsRes,
         todaysLogsRes,
+        readinessRes,
       ] = await Promise.all([
         supabase
           .schema("wellness")
@@ -216,6 +217,12 @@ async function gatherContext(
               return d.toISOString();
             })(),
           ),
+        supabase
+          .schema("wellness")
+          .from("readiness")
+          .select("day, score, hrv_avg, resting_hr, temp_deviation")
+          .gte("day", isoDaysAgo(14).slice(0, 10))
+          .order("day", { ascending: false }),
       ]);
       const weekSleepRows = weekSleepRes.data ?? [];
       const avgSleepMin =
@@ -240,6 +247,20 @@ async function gatherContext(
           ? Number(bodyRes.data.weight_lbs) -
             Number(bodyOldRes.data.weight_lbs)
           : null;
+      // Oura recovery (empty if Oura isn't connected).
+      const readinessRows = readinessRes.data ?? [];
+      const readinessScores = readinessRows
+        .map((r) => r.score)
+        .filter((s): s is number => s != null);
+      const readiness7dAvg =
+        readinessScores.length > 0
+          ? Math.round(
+              readinessScores
+                .slice(0, 7)
+                .reduce((s, n) => s + n, 0) /
+                Math.min(7, readinessScores.length),
+            )
+          : null;
       return {
         today: isoToday(),
         latest_sleep: sleepRes.data,
@@ -250,6 +271,8 @@ async function gatherContext(
         weight_delta_30d: weightDelta,
         active_medications: medsRes.data ?? [],
         today_medication_logs: todaysLogsRes.data ?? [],
+        latest_readiness: readinessRows[0] ?? null,
+        readiness_7d_avg_score: readiness7dAvg,
       };
     }
     case "goals": {

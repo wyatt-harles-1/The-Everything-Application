@@ -515,6 +515,24 @@ export function buildReadTools(supabase: SupabaseClient) {
     }),
 
     // ------------------------------------------------------------------
+    query_readiness: tool({
+      description:
+        "Recent daily recovery from Oura (wellness.readiness): readiness score (0-100), average HRV (ms), resting heart rate (bpm), and body-temperature deviation (°C). Use for recovery questions and for correlating recovery against training (e.g. 'how did my readiness track with my lifts last week'). Empty if Oura isn't connected.",
+      inputSchema: z.object({
+        days: z.number().int().min(1).max(90).default(14),
+      }),
+      execute: async ({ days }) => {
+        const { data } = await supabase
+          .schema("wellness")
+          .from("readiness")
+          .select("day, score, hrv_avg, resting_hr, temp_deviation")
+          .gte("day", isoDaysAgo(days).slice(0, 10))
+          .order("day", { ascending: false });
+        return { count: data?.length ?? 0, entries: data ?? [] };
+      },
+    }),
+
+    // ------------------------------------------------------------------
     get_lifting_rules: tool({
       description:
         "The user's current lifting-module rules row (invariant #8). Includes weekly frequency, preferred days, default time, skip_deload flag. Returns nulls when no row exists yet (defaults will be used).",
@@ -566,7 +584,7 @@ const DOMAIN_READ_TOOL_NAMES: Record<CoachDomain, ReadToolName[]> = {
     "get_lifting_rules",
   ],
   running: ["query_workouts", "query_recent_runs", "get_running_rules"],
-  health: ["query_sleep", "query_mood"],
+  health: ["query_sleep", "query_mood", "query_readiness"],
   goals: ["query_goals", "query_habits"],
 };
 

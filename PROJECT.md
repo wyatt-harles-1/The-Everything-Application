@@ -123,7 +123,8 @@ See `README.md` for setup and day-to-day commands.
   deviation). Both emit timeline events; the health hub shows a **Recovery** card. Same
   source/encryption/idempotency pattern as Strava (`src/lib/integrations/oura.ts`, Oura source
   helpers in `sources.ts`, `src/app/api/integrations/oura/*`). Tokens use form-encoded OAuth.
-  Follow-up: wire `readiness` into the health coach + an AI read tool.
+  Readiness is wired into the AI: a `query_readiness` read tool (master + health specialist) and
+  the health coach's daily context both see recovery, so the assistant can correlate it with training.
 - **Operational lock:** site-wide passcode gate at `/gate` — controlled by the `SITE_PASSCODE`
   env var, custom Life Hub-styled passcode page, HttpOnly + Secure cookie holds a SHA-256 hash
   (cleartext never stored), sits in front of Supabase auth. Toggle on/off by setting or removing
@@ -217,11 +218,13 @@ Apple/Google/Samsung are a *later* companion-app effort, not a quick OAuth conne
 ## 7. Current focus — pick up here
 
 **Just landed:**
-- **Phase 5c — Oura connector (sleep + recovery)** built. OAuth connect + manual "Sync now" at
-  `/integrations`; sleep → `wellness.sleep_sessions`, daily readiness → new `wellness.readiness`
-  table; health hub Recovery card. Migration `20260602000000_oura_integration.sql` applied to the
-  hosted DB. Typecheck + lint + build green. **Not yet committed/pushed; needs Oura app creds +
-  manual E2E.**
+- **Phase 5c — Oura connector (sleep + recovery)** built + committed (`4593784`, CI green).
+  OAuth connect + manual "Sync now"; sleep → `wellness.sleep_sessions`, readiness → new
+  `wellness.readiness` table; health hub Recovery card. Migration applied to the hosted DB.
+- **Readiness → AI wiring** (this session): `query_readiness` read tool (master + health
+  specialist) + readiness in the health coach's context, so the assistant can correlate recovery
+  with training. Typecheck + lint + build green. **Not yet committed/pushed.** Still needs Oura app
+  creds + manual E2E to see real data.
 - **Strava (5a) is LIVE and verified in prod** — connect → sync confirmed working.
 - Integrations strategy recorded in §5 (cloud-API vs on-device).
 
@@ -230,7 +233,6 @@ Apple/Google/Samsung are a *later* companion-app effort, not a quick OAuth conne
   `OURA_CLIENT_SECRET` in Vercel; **Redirect URI** = `https://projectkosmos.com/api/integrations/oura/callback`.
 - **Manual E2E**: connect → "Sync now" → nights land in `sleep_sessions` + `readiness`, Recovery
   card shows, re-sync skips dupes.
-- Fast-follow: wire `wellness.readiness` into the health coach `gatherContext` + an AI read tool.
 - Still untested in a browser: multi-agent assistant, Phase 4e6 coach cards. Add `SITE_PASSCODE` to
   Vercel Preview env.
 
