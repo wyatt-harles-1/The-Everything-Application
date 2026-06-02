@@ -7,7 +7,7 @@
 > checklists and the **Current focus** section as work lands, so this file is always the handoff
 > point between sessions.
 
-**Last updated:** 2026-06-01
+**Last updated:** 2026-06-02
 
 ---
 
@@ -117,6 +117,13 @@ See `README.md` for setup and day-to-day commands.
   idempotent via a `(source_id, external_id)` unique index. Auto-sync (webhooks/cron) is the next
   wave. Code: `src/lib/integrations/{strava,sources}.ts`, `src/app/api/integrations/strava/*`,
   `src/app/(app)/integrations/*`.
+- **Integrations — Oura (Phase 5c):** OAuth connect + manual "Sync now" at `/integrations`.
+  Imports main nightly **sleep** → `wellness.sleep_sessions` (quality from efficiency; HRV/RHR in
+  notes) and **daily readiness** → the new `wellness.readiness` table (score, HRV, resting HR, temp
+  deviation). Both emit timeline events; the health hub shows a **Recovery** card. Same
+  source/encryption/idempotency pattern as Strava (`src/lib/integrations/oura.ts`, Oura source
+  helpers in `sources.ts`, `src/app/api/integrations/oura/*`). Tokens use form-encoded OAuth.
+  Follow-up: wire `readiness` into the health coach + an AI read tool.
 - **Operational lock:** site-wide passcode gate at `/gate` — controlled by the `SITE_PASSCODE`
   env var, custom Life Hub-styled passcode page, HttpOnly + Secure cookie holds a SHA-256 hash
   (cleartext never stored), sits in front of Supabase auth. Toggle on/off by setting or removing
@@ -124,10 +131,10 @@ See `README.md` for setup and day-to-day commands.
 
 ### 🔭 Wanted but not started
 
-- **Wellness integrations (Phase 5) — remaining:** Strava **auto-sync** (webhooks or cron; Wave 1
-  is manual "Sync now"); more **cloud-API** connectors (Oura/Fitbit/Withings for sleep, HR, weight);
-  on-device hubs (Apple Health / Google Health Connect / Samsung) need a **companion app** — see
-  the Integrations strategy note above.
+- **Wellness integrations (Phase 5) — remaining:** **auto-sync** for Strava + Oura (webhooks or
+  cron; today both are manual "Sync now"); more **cloud-API** connectors (Fitbit/Withings for
+  steps/weight; Cronometer for nutrition); on-device hubs (Apple Health / Google Health Connect /
+  Samsung) need a **companion app** — see the Integrations strategy note above.
 - **Bloodwork module + AI doctor:** tables exist; the module UI and AI interpretation don't.
 - **Finance domain + AI financial advisor:** Plaid sync, `finance` schema, advisor agent.
 - **Knowledge domain:** reserved, undefined.
@@ -200,7 +207,8 @@ Apple/Google/Samsung are a *later* companion-app effort, not a quick OAuth conne
 | **5** | **Wellness integrations** (current) | 🚧 Strava live |
 | · 5a | Strava: OAuth connect + manual "Sync now" | ✅ verified in prod |
 | · 5b | Strava auto-sync (webhooks or cron) | ⬜ |
-| · 5c | More cloud-API connectors (Oura/Fitbit → sleep+HR, Withings → weight, Cronometer → nutrition) | ⬜ |
+| · 5c | Oura connector (sleep + readiness/HRV) | ✅ |
+| · 5c+ | More cloud-API connectors (Fitbit, Withings, Cronometer) | ⬜ |
 | · 5d | On-device hubs (Apple Health / Google Health Connect / Samsung) — needs a companion app | ⬜ |
 | 6+ | Bloodwork + AI doctor, Finance + AI advisor, knowledge, extraction | ⬜ |
 
@@ -209,23 +217,26 @@ Apple/Google/Samsung are a *later* companion-app effort, not a quick OAuth conne
 ## 7. Current focus — pick up here
 
 **Just landed:**
-- **Phase 5 Wave 1 — Strava integration is LIVE and verified in prod.** OAuth connect + manual
-  "Sync now" at `/integrations`. Committed (`28a2e21`), pushed, CI green, migration
-  `20260530000000_workouts_external_id.sql` applied to the hosted DB, Strava app registered
-  (client id `253419`), env vars set in Vercel, and the connect → sync flow **confirmed working**.
-- Recorded the **Integrations strategy** (cloud-API vs on-device platforms) in §5 and reshaped the
-  Phase 5 roadmap: 5c = more cloud-API connectors, 5d = on-device hubs need a companion app.
-- Earlier this phase-block: Phase 4e7 multi-agent (`aa3e0dd`), GitHub Actions off node20, Docker optional.
+- **Phase 5c — Oura connector (sleep + recovery)** built. OAuth connect + manual "Sync now" at
+  `/integrations`; sleep → `wellness.sleep_sessions`, daily readiness → new `wellness.readiness`
+  table; health hub Recovery card. Migration `20260602000000_oura_integration.sql` applied to the
+  hosted DB. Typecheck + lint + build green. **Not yet committed/pushed; needs Oura app creds +
+  manual E2E.**
+- **Strava (5a) is LIVE and verified in prod** — connect → sync confirmed working.
+- Integrations strategy recorded in §5 (cloud-API vs on-device).
 
-**Open follow-ups:**
-- Still untested in a browser from prior sessions: multi-agent assistant (`/assistant`), Phase 4e6
-  coach cards (hub pages).
-- Add `SITE_PASSCODE` to Vercel **Preview** env (dashboard).
+**Open follow-ups / to finish Oura Wave:**
+- **Register an Oura app** (https://cloud.ouraring.com/oauth/applications) → set `OURA_CLIENT_ID` /
+  `OURA_CLIENT_SECRET` in Vercel; **Redirect URI** = `https://projectkosmos.com/api/integrations/oura/callback`.
+- **Manual E2E**: connect → "Sync now" → nights land in `sleep_sessions` + `readiness`, Recovery
+  card shows, re-sync skips dupes.
+- Fast-follow: wire `wellness.readiness` into the health coach `gatherContext` + an AI read tool.
+- Still untested in a browser: multi-agent assistant, Phase 4e6 coach cards. Add `SITE_PASSCODE` to
+  Vercel Preview env.
 
 **Decision pending — what's next:**
-- (a) **Strava auto-sync (5b)** — webhooks or Vercel cron (so runs sync without a button press), or
-- (b) **Next cloud-API connector (5c)** — Oura or Fitbit (sleep/HR) is the highest-value add since
-  Strava covers training but nothing recovery-side, or
+- (a) **Auto-sync (5b)** for Strava + Oura (webhooks or Vercel cron — no button press), or
+- (b) **Next connector** (Withings → weight, or Fitbit), or
 - (c) Tech debt: timezone-aware pass, deployment hardening (preview DB, DMARC, health monitoring).
 
 _Update this section at the end of each session so the next one starts here._

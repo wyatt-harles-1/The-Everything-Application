@@ -15,6 +15,10 @@ import {
   refreshAccessToken,
   type StravaTokenResponse,
 } from "./strava";
+import {
+  refreshAccessToken as refreshOuraToken,
+  type OuraTokens,
+} from "./oura";
 
 // What we persist in shared.sources.config for a Strava source. access_token
 // and refresh_token are AES-GCM blobs (never plaintext at rest); everything
@@ -108,11 +112,11 @@ export async function upsertStravaSource(
 }
 
 // Persist a full config blob (e.g. after a token refresh or to stamp
-// last_synced_at).
+// last_synced_at). Accepts any provider's config shape.
 export async function updateSourceConfig(
   supabase: SupabaseClient,
   sourceId: string,
-  config: StravaConfig,
+  config: StravaConfig | OuraConfig,
 ): Promise<void> {
   await supabase
     .schema("shared")
@@ -172,4 +176,121 @@ export async function getImportedCount(
     .select("id", { count: "exact", head: true })
     .eq("source_id", sourceId);
   return count ?? 0;
+}
+
+// Generic row count for a source in any schema/table - used by integration
+// cards that import into more than one table (e.g. Oura → sleep + readiness).
+export async function countForSource(
+  supabase: SupabaseClient,
+  schema: string,
+  table: string,
+  sourceId: string,
+): Promise<number> {
+  const { count } = await supabase
+    .schema(schema)
+    .from(table)
+    .select("id", { count: "exact", head: true })
+    .eq("source_id", sourceId);
+  return count ?? 0;
+}
+
+// ---- Oura ------------------------------------------------------------------
+// Parallel helpers for the Oura source. Strava's helpers are intentionally
+// left untouched so the verified prod path can't regress; the shapes are close
+// but not identical (Oura has no athlete id, and its token TTL is normalized
+// to expires_at in oura.ts).
+
+export type OuraConfig = {
+  access_token: string; // encrypted
+  refresh_token: string; // encrypted
+  expires_at: number; // epoch seconds
+  scopes: string[];
+  last_synced_at: string | null;
+  backfill_days: number;
+};
+
+export type OuraSource = {
+  id: string;
+  config: OuraConfig;
+};
+
+export async function getOuraSource(
+  supabase: SupabaseClient,
+): Promise<OuraSource | null> {
+  const { data } = await supabase
+    .schema("shared")
+    .from("sources")
+    .select("id, config")
+    .eq("provider", "oura")
+    .eq("is_active", true)
+    .maybeSingle();
+  if (!data) return null;
+  return { id: data.id as string, config: data.config as OuraConfig };
+}
+
+// One Oura source per user. external_account_id is null (Oura needs no account
+// id), so the (user_id, provider, external_account_id) NULLS-NOT-DISTINCT
+// unique key makes reconnect an upsert. Preserves prior sync bookkeeping.
+export async function upsertOuraSource(
+  supabase: SupabaseClient,
+  userId: string,
+  token: OuraTokens,
+  scopes: string[],
+): Promise<{ error: string | null }> {
+  const { data: existing } = await supabase
+    .schema("shared")
+    .from("sources")
+    .select("config")
+    .eq("provider", "oura")
+    .eq("user_id", userId)
+    .maybeSingle();
+  const prior = (existing?.config ?? null) as OuraConfig | null;
+
+  const config: OuraConfig = {
+    access_token: encryptApiKey(token.access_token),
+    refresh_token: encryptApiKey(token.refresh_token),
+    expires_at: token.expires_at,
+    scopes,
+    last_synced_at: prior?.last_synced_at ?? null,
+    backfill_days: prior?.backfill_days ?? DEFAULT_BACKFILL_DAYS,
+  };
+
+  const { error } = await supabase
+    .schema("shared")
+    .from("sources")
+    .upsert(
+      {
+        user_id: userId,
+        name: "Oura",
+        kind: "integration",
+        domain: "wellness",
+        provider: "oura",
+        external_account_id: null,
+        config,
+        is_active: true,
+      },
+      { onConflict: "user_id,provider,external_account_id" },
+    );
+  return { error: error?.message ?? null };
+}
+
+// Fresh Oura access token, refreshing + persisting rotated tokens near expiry.
+export async function ensureFreshOuraToken(
+  supabase: SupabaseClient,
+  source: OuraSource,
+): Promise<{ accessToken: string; config: OuraConfig }> {
+  const cfg = source.config;
+  const now = Math.floor(Date.now() / 1000);
+  if (cfg.expires_at - EXPIRY_BUFFER_SECONDS > now) {
+    return { accessToken: decryptApiKey(cfg.access_token), config: cfg };
+  }
+  const refreshed = await refreshOuraToken(decryptApiKey(cfg.refresh_token));
+  const nextConfig: OuraConfig = {
+    ...cfg,
+    access_token: encryptApiKey(refreshed.access_token),
+    refresh_token: encryptApiKey(refreshed.refresh_token),
+    expires_at: refreshed.expires_at,
+  };
+  await updateSourceConfig(supabase, source.id, nextConfig);
+  return { accessToken: refreshed.access_token, config: nextConfig };
 }

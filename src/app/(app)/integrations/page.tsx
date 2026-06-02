@@ -5,9 +5,16 @@
 import Link from "next/link";
 
 import { createClient } from "@/lib/supabase/server";
-import { getStravaSource, getImportedCount } from "@/lib/integrations/sources";
+import {
+  getStravaSource,
+  getImportedCount,
+  getOuraSource,
+  countForSource,
+} from "@/lib/integrations/sources";
 import { isStravaConfigured } from "@/lib/integrations/strava";
+import { isOuraConfigured } from "@/lib/integrations/oura";
 import { StravaCard } from "./StravaCard";
+import { OuraCard } from "./OuraCard";
 
 // Maps the ?error= / ?connected= flags the OAuth routes redirect back with
 // into a human banner.
@@ -30,6 +37,24 @@ const NOTICES: Record<string, { ok: boolean; text: string }> = {
     ok: false,
     text: "Strava isn't configured on the server yet (missing STRAVA_CLIENT_ID / STRAVA_CLIENT_SECRET).",
   },
+  "connected:oura": { ok: true, text: "Oura connected." },
+  "error:oura_denied": { ok: false, text: "Oura authorization was cancelled." },
+  "error:oura_state": {
+    ok: false,
+    text: "Authorization expired or failed a security check. Please try again.",
+  },
+  "error:oura_save_failed": {
+    ok: false,
+    text: "Couldn't save the Oura connection. Please try again.",
+  },
+  "error:oura_exchange_failed": {
+    ok: false,
+    text: "Oura rejected the connection. Check that your Oura app's Redirect URI exactly matches this site's callback.",
+  },
+  "error:oura_not_configured": {
+    ok: false,
+    text: "Oura isn't configured on the server yet (missing OURA_CLIENT_ID / OURA_CLIENT_SECRET).",
+  },
 };
 
 export default async function IntegrationsPage({
@@ -44,6 +69,14 @@ export default async function IntegrationsPage({
   const importedCount = source
     ? await getImportedCount(supabase, source.id)
     : 0;
+
+  const ouraSource = await getOuraSource(supabase);
+  const [ouraSleepCount, ouraReadinessCount] = ouraSource
+    ? await Promise.all([
+        countForSource(supabase, "wellness", "sleep_sessions", ouraSource.id),
+        countForSource(supabase, "wellness", "readiness", ouraSource.id),
+      ])
+    : [0, 0];
 
   const noticeKey = sp.connected
     ? `connected:${sp.connected}`
@@ -85,6 +118,14 @@ export default async function IntegrationsPage({
         athleteId={source?.config.athlete_id ?? null}
         lastSynced={source?.config.last_synced_at ?? null}
         importedCount={importedCount}
+      />
+
+      <OuraCard
+        connected={!!ouraSource}
+        configured={isOuraConfigured()}
+        lastSynced={ouraSource?.config.last_synced_at ?? null}
+        sleepCount={ouraSleepCount}
+        readinessCount={ouraReadinessCount}
       />
     </div>
   );

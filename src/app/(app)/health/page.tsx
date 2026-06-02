@@ -45,6 +45,12 @@ type LatestCycle = {
   phase: string | null;
   flow: string | null;
 };
+type LatestReadiness = {
+  day: string;
+  score: number | null;
+  hrv_avg: number | null;
+  resting_hr: number | null;
+};
 
 export default async function HealthHubPage() {
   const supabase = await createClient();
@@ -63,6 +69,7 @@ export default async function HealthHubPage() {
     flaggedResultsRes,
     latestCycleRes,
     weekSleepRes,
+    latestReadinessRes,
   ] = await Promise.all([
     supabase
       .schema("wellness")
@@ -148,6 +155,13 @@ export default async function HealthHubPage() {
         "end_at",
         new Date(Date.now() - 7 * 86400_000).toISOString(),
       ),
+    supabase
+      .schema("wellness")
+      .from("readiness")
+      .select("day, score, hrv_avg, resting_hr")
+      .order("day", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
   ]);
 
   const latestSleep = latestSleepRes.data as LatestSleep | null;
@@ -164,6 +178,7 @@ export default async function HealthHubPage() {
   const flaggedResults = flaggedResultsRes.data ?? [];
   const latestCycle = latestCycleRes.data as LatestCycle | null;
   const weekSleep = weekSleepRes.data ?? [];
+  const latestReadiness = latestReadinessRes.data as LatestReadiness | null;
 
   // Derived numbers (computed once, reused below).
   const moodAvg =
@@ -256,6 +271,33 @@ export default async function HealthHubPage() {
             <CardEmpty linkHref="/log/sleep/new" linkLabel="Log sleep" />
           )}
         </Card>
+
+        {/* RECOVERY (Oura readiness; only renders when synced) --------- */}
+        {latestReadiness ? (
+          <Card title="Recovery">
+            <CardStat
+              value={
+                latestReadiness.score != null
+                  ? String(latestReadiness.score)
+                  : "—"
+              }
+              hint="readiness"
+            />
+            <CardSub>
+              {[
+                latestReadiness.hrv_avg != null
+                  ? `HRV ${latestReadiness.hrv_avg}`
+                  : null,
+                latestReadiness.resting_hr != null
+                  ? `RHR ${latestReadiness.resting_hr}`
+                  : null,
+                formatDate(latestReadiness.day),
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            </CardSub>
+          </Card>
+        ) : null}
 
         {/* MOOD -------------------------------------------------------- */}
         <Card title="Mood">
