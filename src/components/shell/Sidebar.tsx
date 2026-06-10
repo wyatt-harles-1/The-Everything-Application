@@ -33,7 +33,7 @@ export function Sidebar({ email }: { email: string }) {
         href="/"
         className="px-3 pb-4 text-base font-semibold tracking-tight text-text"
       >
-        Life Hub
+        Kosmos
       </Link>
 
       <nav className="flex flex-1 flex-col gap-0.5">

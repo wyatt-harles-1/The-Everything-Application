@@ -5,6 +5,7 @@ import {
   Home,
   ClipboardList,
   Calendar,
+  CalendarDays,
   Repeat,
   Target,
   Dumbbell,
@@ -26,6 +27,7 @@ export type NavItem = {
 export const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "Home", icon: Home },
   { href: "/log", label: "Log", icon: ClipboardList },
+  { href: "/calendar", label: "Calendar", icon: CalendarDays },
   { href: "/schedule", label: "Schedule", icon: Calendar },
   { href: "/habits", label: "Habits", icon: Repeat },
   { href: "/goals", label: "Goals", icon: Target },

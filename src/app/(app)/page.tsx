@@ -22,6 +22,22 @@ import {
   type HomeWidgetId,
 } from "@/lib/home/layout";
 
+import {
+  startOfMonth,
+  endOfMonth,
+  startOfWeek,
+  endOfWeek,
+  addDays,
+} from "date-fns";
+
+import {
+  sleepTrend,
+  moodTrend,
+  weightTrend,
+  trainingLoadTrend,
+} from "@/lib/analytics/metrics";
+import { fetchCalendarItems } from "@/lib/calendar/data";
+
 import { HomeDashboard, type HomeWidget } from "./home/HomeDashboard";
 import { TodayWidget } from "./home/widgets/TodayWidget";
 import { TrainingWidget } from "./home/widgets/TrainingWidget";
@@ -30,6 +46,11 @@ import { GoalsWidget } from "./home/widgets/GoalsWidget";
 import { QuickLogWidget } from "./home/widgets/QuickLogWidget";
 import { SectionsWidget } from "./home/widgets/SectionsWidget";
 import { RecentWidget } from "./home/widgets/RecentWidget";
+import { CalendarWidget } from "./home/widgets/CalendarWidget";
+import { SleepChartWidget } from "./home/widgets/SleepChartWidget";
+import { WeightTrendWidget } from "./home/widgets/WeightTrendWidget";
+import { MoodTrendWidget } from "./home/widgets/MoodTrendWidget";
+import { TrainingLoadWidget } from "./home/widgets/TrainingLoadWidget";
 import { type GoalForCard } from "./goals/GoalCard";
 
 export default async function HomePage() {
@@ -46,6 +67,11 @@ export default async function HomePage() {
   const tomorrowStart = new Date(todayStart);
   tomorrowStart.setDate(tomorrowStart.getDate() + 1);
 
+  // Visible range for the home calendar widget = the current month's grid
+  // (including leading/trailing days from adjacent months).
+  const monthGridStart = startOfWeek(startOfMonth(todayStart), { weekStartsOn: 1 });
+  const monthGridEnd = endOfWeek(endOfMonth(todayStart), { weekStartsOn: 1 });
+
   const [
     todaysScheduledRes,
     activeMesoRes,
@@ -55,6 +81,11 @@ export default async function HomePage() {
     topGoalsRes,
     latestEventsRes,
     prefsRes,
+    sleepT,
+    moodT,
+    weightT,
+    trainingT,
+    calendarItems,
   ] = await Promise.all([
     supabase
       .schema("shared")
@@ -128,6 +159,17 @@ export default async function HomePage() {
       .select("home_layout")
       .eq("user_id", user.id)
       .maybeSingle(),
+    // Chart-widget trends (each returns { points: [] } when the user has no
+    // data, so the matching widget self-hides below).
+    sleepTrend(supabase, 30),
+    moodTrend(supabase, 30),
+    weightTrend(supabase, 90),
+    trainingLoadTrend(supabase, 12),
+    fetchCalendarItems(
+      supabase,
+      monthGridStart.toISOString(),
+      addDays(monthGridEnd, 1).toISOString(),
+    ),
   ]);
 
   const todaysScheduled = todaysScheduledRes.data ?? [];
@@ -183,9 +225,21 @@ export default async function HomePage() {
       ) : null,
     habits: habitItems.length > 0 ? <HabitsWidget items={habitItems} /> : null,
     goals: topGoals.length > 0 ? <GoalsWidget goals={topGoals} /> : null,
+    sleepchart:
+      sleepT.points.length > 0 ? <SleepChartWidget trend={sleepT} /> : null,
+    trainingload:
+      trainingT.points.length > 0 ? (
+        <TrainingLoadWidget trend={trainingT} />
+      ) : null,
+    weighttrend:
+      weightT.points.length > 0 ? <WeightTrendWidget trend={weightT} /> : null,
+    moodtrend:
+      moodT.points.length > 0 ? <MoodTrendWidget trend={moodT} /> : null,
     quicklog: <QuickLogWidget />,
     sections: <SectionsWidget />,
     recent: latestEvents.length > 0 ? <RecentWidget events={latestEvents} /> : null,
+    // Always present — a calendar is useful even with no items this month.
+    calendar: <CalendarWidget items={calendarItems} />,
   };
 
   const widgets: HomeWidget[] = (Object.keys(nodes) as HomeWidgetId[])
@@ -203,7 +257,7 @@ export default async function HomePage() {
   return (
     <div className="space-y-[var(--gap-section)]">
       <header className="space-y-1">
-        <p className="text-xs uppercase tracking-[0.2em] text-muted">Life Hub</p>
+        <p className="text-xs uppercase tracking-[0.2em] text-muted">Kosmos</p>
         <h1 className="text-2xl font-semibold tracking-tight text-text sm:text-3xl">
           {greeting()}
         </h1>
