@@ -38,15 +38,12 @@ export function RatingScale({
           />
           <span
             className="
-              flex h-11 cursor-pointer items-center justify-center
-              rounded-md border border-zinc-300 bg-white text-sm
+              flex h-[var(--control-h)] cursor-pointer items-center justify-center
+              rounded-[var(--radius-card)] border border-border bg-surface text-sm text-text
               transition-colors
-              hover:border-zinc-400 hover:bg-zinc-50
-              peer-checked:border-zinc-950 peer-checked:bg-zinc-950 peer-checked:text-white
-              peer-focus-visible:ring-2 peer-focus-visible:ring-zinc-950 peer-focus-visible:ring-offset-1
-              dark:border-zinc-700 dark:bg-zinc-900
-              dark:hover:border-zinc-500 dark:hover:bg-zinc-800
-              dark:peer-checked:border-zinc-50 dark:peer-checked:bg-zinc-50 dark:peer-checked:text-zinc-950
+              hover:border-accent hover:bg-hover
+              peer-checked:border-accent peer-checked:bg-accent peer-checked:text-accent-fg
+              peer-focus-visible:ring-2 peer-focus-visible:ring-accent peer-focus-visible:ring-offset-1
             "
           >
             {n}

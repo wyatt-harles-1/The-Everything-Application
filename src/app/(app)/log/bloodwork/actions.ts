@@ -45,6 +45,24 @@ function panelSummary(panel: { panel_type?: string | null }, resultCount: number
 
 // Upload the file to {user_id}/{panel_id}.{ext}; returns the path or null
 // if no file was provided.
+// A lab result is a PDF or an image — nothing else should ever land in the
+// bucket. Both the extension and the content type are attacker-controlled (the
+// browser sends file.name and file.type verbatim), so an unrestricted upload
+// lets someone store e.g. an .html/text/html (or scriptable .svg) file that
+// then executes when opened via its signed URL on the *.supabase.co origin
+// (stored XSS / phishing in that origin). We allowlist a fixed set of inert
+// types and force the stored content type from the allowlist (never file.type),
+// so the object can only ever be served as a PDF or a raster image — never as
+// active content. (svg is deliberately excluded for this reason.)
+const ALLOWED_UPLOAD_TYPES: Record<string, string> = {
+  pdf: "application/pdf",
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  webp: "image/webp",
+  heic: "image/heic",
+};
+
 async function uploadPanelFile(
   supabase: SupabaseClient,
   userId: string,
@@ -58,14 +76,23 @@ async function uploadPanelFile(
     return { path: null, error: "File too large (25 MB max)." };
   }
 
-  // Extension - default to "bin" if the browser doesn't send a name.
+  // Extension drives the allowlist. A missing/extension-less name is rejected
+  // rather than defaulted, so nothing untyped reaches storage.
   const nameParts = file.name.split(".");
-  const ext = nameParts.length > 1 ? nameParts.pop()!.toLowerCase() : "bin";
+  const ext = nameParts.length > 1 ? nameParts.pop()!.toLowerCase() : "";
+  const contentType = ALLOWED_UPLOAD_TYPES[ext];
+  if (!contentType) {
+    return {
+      path: null,
+      error: "Unsupported file type. Upload a PDF or image (png, jpg, webp, heic).",
+    };
+  }
   const path = `${userId}/${panelId}.${ext}`;
 
   const { error } = await supabase.storage
     .from("bloodwork")
-    .upload(path, file, { upsert: true, contentType: file.type || undefined });
+    // contentType is forced from our allowlist, NOT from the client's file.type.
+    .upload(path, file, { upsert: true, contentType });
   if (error) return { path: null, error: error.message };
   return { path };
 }

@@ -1,42 +1,51 @@
-// Authenticated home / Life Hub dashboard. Replaces the Phase 2 minimal
-// landing page with a daily-briefing layout: what's on today, where my
-// training stands, how my habits + goals are going, what I recently
-// logged. Everything links into the module pages for deeper context.
+// Authenticated home / Life Hub dashboard. A daily-briefing layout: what's on
+// today, where my training stands, how my habits + goals are going, what I
+// recently logged. Everything links into the module pages for deeper context.
 //
-// Mobile-first single column. Most users open the app on a phone in the
-// morning - the goal of this page is "see the state of your life at a
-// glance, without scrolling, without tapping."
+// This server component owns ALL data fetching, then hands the rendered widget
+// nodes to <HomeDashboard> (client), which renders them in the user's saved
+// order and provides an edit mode to reorder/hide. Keeping fetch here means the
+// customization layer adds no client-side data loading.
 
-import Link from "next/link";
+import type { ReactNode } from "react";
 
 import { createClient } from "@/lib/supabase/server";
-import { formatDateTime, formatTime } from "@/lib/format";
 import { computeHabitProgress } from "@/lib/scheduler/streak";
 import {
   computeMesoProgress,
-  formatMesoStatusShort,
   type MesocycleRow,
 } from "@/lib/lifting/mesocycle";
+import {
+  WIDGET_LABELS,
+  normalizeOrder,
+  normalizeHidden,
+  type HomeWidgetId,
+} from "@/lib/home/layout";
 
-import { GoalCard, type GoalForCard } from "./goals/GoalCard";
-import { HabitCard } from "./habits/HabitCard";
+import { HomeDashboard, type HomeWidget } from "./home/HomeDashboard";
+import { TodayWidget } from "./home/widgets/TodayWidget";
+import { TrainingWidget } from "./home/widgets/TrainingWidget";
+import { HabitsWidget, type HabitItem } from "./home/widgets/HabitsWidget";
+import { GoalsWidget } from "./home/widgets/GoalsWidget";
+import { QuickLogWidget } from "./home/widgets/QuickLogWidget";
+import { SectionsWidget } from "./home/widgets/SectionsWidget";
+import { RecentWidget } from "./home/widgets/RecentWidget";
+import { type GoalForCard } from "./goals/GoalCard";
 
 export default async function HomePage() {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  // The (app) layout already redirects unauthenticated users; this guard keeps
+  // the page safe if it's ever rendered without a session.
+  if (!user) return null;
 
-  // Today bounds: midnight to midnight in server-local time. Good enough
-  // for daily granularity; full TZ-aware bounds wait for the timezone
-  // polish pass.
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
   const tomorrowStart = new Date(todayStart);
   tomorrowStart.setDate(tomorrowStart.getDate() + 1);
 
-  // Parallelize every query - server component is async-friendly and
-  // these are all independent table reads.
   const [
     todaysScheduledRes,
     activeMesoRes,
@@ -45,6 +54,7 @@ export default async function HomePage() {
     habitEventsRes,
     topGoalsRes,
     latestEventsRes,
+    prefsRes,
   ] = await Promise.all([
     supabase
       .schema("shared")
@@ -83,12 +93,12 @@ export default async function HomePage() {
       .eq("active", true)
       .order("started_at", { ascending: false })
       .limit(4),
-    // 60-day event window for habit progress + recent activity. One query,
-    // re-used twice below.
     supabase
       .schema("shared")
       .from("events")
-      .select("domain, event_type, title, summary, occurred_at, detail_table, detail_id")
+      .select(
+        "domain, event_type, title, summary, occurred_at, detail_table, detail_id",
+      )
       .gte(
         "occurred_at",
         new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString(),
@@ -109,6 +119,15 @@ export default async function HomePage() {
       .select("event_type, title, summary, occurred_at")
       .order("occurred_at", { ascending: false })
       .limit(6),
+    // Saved home layout. Wrapped query — if user_preferences doesn't exist yet
+    // the error is swallowed by Supabase (data:null) and we fall back to the
+    // default order.
+    supabase
+      .schema("shared")
+      .from("user_preferences")
+      .select("home_layout")
+      .eq("user_id", user.id)
+      .maybeSingle(),
   ]);
 
   const todaysScheduled = todaysScheduledRes.data ?? [];
@@ -120,7 +139,59 @@ export default async function HomePage() {
   const topGoals = (topGoalsRes.data ?? []) as GoalForCard[];
   const latestEvents = latestEventsRes.data ?? [];
 
-  // No data at all? Show an onboarding nudge. Otherwise full briefing.
+  const savedLayout = (prefsRes.data?.home_layout ?? null) as {
+    order?: string[];
+    hidden?: string[];
+  } | null;
+
+  // Precompute habit progress on the server so HabitsWidget stays presentational.
+  const habitItems: HabitItem[] = habits.map((h) => {
+    const matching = habitEvents.filter(
+      (e) =>
+        e.domain === h.domain &&
+        (h.event_type === null || e.event_type === h.event_type),
+    );
+    const progress = computeHabitProgress(
+      matching,
+      h.target_frequency_per_week,
+      new Date(h.started_at + "T00:00:00"),
+    );
+    return {
+      habit: {
+        id: h.id,
+        name: h.name,
+        domain: h.domain,
+        event_type: h.event_type,
+      },
+      progress,
+    };
+  });
+
+  // Build each widget's node, or null when it has nothing to show. Quick log +
+  // Sections are always present; the rest self-hide when empty.
+  const nodes: Record<HomeWidgetId, ReactNode | null> = {
+    today:
+      todaysScheduled.length > 0 || inProgressSession ? (
+        <TodayWidget
+          inProgressSession={inProgressSession ?? null}
+          scheduled={todaysScheduled}
+        />
+      ) : null,
+    training:
+      activeMeso && mesoProgress ? (
+        <TrainingWidget meso={activeMeso} progress={mesoProgress} />
+      ) : null,
+    habits: habitItems.length > 0 ? <HabitsWidget items={habitItems} /> : null,
+    goals: topGoals.length > 0 ? <GoalsWidget goals={topGoals} /> : null,
+    quicklog: <QuickLogWidget />,
+    sections: <SectionsWidget />,
+    recent: latestEvents.length > 0 ? <RecentWidget events={latestEvents} /> : null,
+  };
+
+  const widgets: HomeWidget[] = (Object.keys(nodes) as HomeWidgetId[])
+    .filter((id) => nodes[id] !== null)
+    .map((id) => ({ id, label: WIDGET_LABELS[id], node: nodes[id] }));
+
   const isEmpty =
     todaysScheduled.length === 0 &&
     !activeMeso &&
@@ -130,241 +201,33 @@ export default async function HomePage() {
     latestEvents.length === 0;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-[var(--gap-section)]">
       <header className="space-y-1">
-        <p className="text-xs uppercase tracking-[0.2em] text-zinc-500 dark:text-zinc-400">
-          Life Hub
-        </p>
-        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+        <p className="text-xs uppercase tracking-[0.2em] text-muted">Life Hub</p>
+        <h1 className="text-2xl font-semibold tracking-tight text-text sm:text-3xl">
           {greeting()}
         </h1>
-        <p className="text-sm text-zinc-600 dark:text-zinc-400">
-          {user!.email}
-        </p>
+        <p className="text-sm text-muted">{user.email}</p>
       </header>
 
       {isEmpty ? (
-        <p className="rounded-lg border border-dashed border-zinc-300 p-4 text-sm text-zinc-500 dark:border-zinc-700 dark:text-zinc-400">
-          Nothing logged yet. Try a quick log below or set up a habit /
-          goal to start tracking.
+        <p className="rounded-[var(--radius-card)] border border-dashed border-border p-4 text-sm text-muted">
+          Nothing logged yet. Tap the + button below to log something, or set up
+          a habit / goal to start tracking.
         </p>
       ) : null}
 
-      {/* TODAY ----------------------------------------------------------- */}
-      {todaysScheduled.length > 0 || inProgressSession ? (
-        <section className="space-y-2">
-          <h2 className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
-            Today
-          </h2>
-          {inProgressSession ? (
-            <Link
-              href={`/lifting/session/${inProgressSession.id}`}
-              className="block rounded-lg border border-emerald-300 bg-emerald-50 p-4 transition-colors hover:bg-emerald-100 dark:border-emerald-700 dark:bg-emerald-950 dark:hover:bg-emerald-900"
-            >
-              <p className="text-xs font-medium uppercase tracking-wider text-emerald-700 dark:text-emerald-300">
-                In progress
-              </p>
-              <p className="mt-0.5 text-sm font-semibold text-emerald-950 dark:text-emerald-50">
-                Resume {inProgressSession.title ?? "session"} →
-              </p>
-              <p className="mt-0.5 text-xs text-emerald-800 dark:text-emerald-200">
-                Started {formatDateTime(inProgressSession.started_at)}
-              </p>
-            </Link>
-          ) : null}
-          {todaysScheduled.length > 0 ? (
-            <ul className="space-y-1.5">
-              {todaysScheduled.map((s) => (
-                <li key={s.id}>
-                  <Link
-                    href={`/schedule/${s.id}`}
-                    className="block rounded-md border border-zinc-200 p-3 transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900"
-                  >
-                    <div className="flex items-baseline justify-between gap-3">
-                      <span className="text-sm font-medium">{s.title}</span>
-                      <span className="shrink-0 text-xs tabular-nums text-zinc-500 dark:text-zinc-400">
-                        {formatTime(s.scheduled_for)}
-                      </span>
-                    </div>
-                    <p className="mt-0.5 text-[11px] uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-                      {s.domain} · {s.event_type}
-                    </p>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          ) : null}
-        </section>
-      ) : null}
-
-      {/* TRAINING CONTEXT ------------------------------------------------- */}
-      {activeMeso && mesoProgress ? (
-        <section className="space-y-2">
-          <h2 className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
-            Training block
-          </h2>
-          <Link
-            href={`/lifting/mesocycles/${activeMeso.id}`}
-            className="block rounded-md border border-zinc-200 p-3 transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900"
-          >
-            <div className="flex items-baseline justify-between gap-3">
-              <span className="text-sm font-semibold">{activeMeso.name}</span>
-              <span
-                className={`shrink-0 text-xs ${
-                  mesoProgress.isDeloadWeek
-                    ? "text-amber-700 dark:text-amber-300"
-                    : "text-zinc-600 dark:text-zinc-300"
-                }`}
-              >
-                {formatMesoStatusShort(mesoProgress, activeMeso.planned_weeks)}
-              </span>
-            </div>
-          </Link>
-        </section>
-      ) : null}
-
-      {/* HABITS ----------------------------------------------------------- */}
-      {habits.length > 0 ? (
-        <section className="space-y-2">
-          <div className="flex items-baseline justify-between">
-            <h2 className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
-              Habits this week
-            </h2>
-            <Link
-              href="/habits"
-              className="text-xs text-zinc-500 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-zinc-50"
-            >
-              all →
-            </Link>
-          </div>
-          <ul className="space-y-1.5">
-            {habits.map((h) => {
-              const matching = habitEvents.filter(
-                (e) =>
-                  e.domain === h.domain &&
-                  (h.event_type === null || e.event_type === h.event_type),
-              );
-              const progress = computeHabitProgress(
-                matching,
-                h.target_frequency_per_week,
-                new Date(h.started_at + "T00:00:00"),
-              );
-              return (
-                <li key={h.id}>
-                  <HabitCard
-                    habit={{
-                      id: h.id,
-                      name: h.name,
-                      domain: h.domain,
-                      event_type: h.event_type,
-                    }}
-                    progress={progress}
-                  />
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-      ) : null}
-
-      {/* TOP GOALS -------------------------------------------------------- */}
-      {topGoals.length > 0 ? (
-        <section className="space-y-2">
-          <div className="flex items-baseline justify-between">
-            <h2 className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
-              Top goals
-            </h2>
-            <Link
-              href="/goals"
-              className="text-xs text-zinc-500 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-zinc-50"
-            >
-              all →
-            </Link>
-          </div>
-          <ul className="space-y-1.5">
-            {topGoals.map((g) => (
-              <li key={g.id}>
-                <GoalCard goal={g} />
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
-
-      {/* QUICK LOG -------------------------------------------------------- */}
-      <section className="space-y-2">
-        <h2 className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
-          Quick log
-        </h2>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <QuickLink href="/log/workout/new" label="Workout" />
-          <QuickLink href="/log/meal/new" label="Meal" />
-          <QuickLink href="/log/sleep/new" label="Sleep" />
-          <QuickLink href="/log/mood/new" label="Mood" />
-        </div>
-      </section>
-
-      {/* SECTIONS NAV ---------------------------------------------------- */}
-      <section className="space-y-2">
-        <h2 className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
-          Sections
-        </h2>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <QuickLink href="/schedule" label="Schedule" />
-          <QuickLink href="/habits" label="Habits" />
-          <QuickLink href="/goals" label="Goals" />
-          <QuickLink href="/lifting" label="Lifting" />
-          <QuickLink href="/running" label="Running" />
-          <QuickLink href="/health" label="Health" />
-          <QuickLink href="/assistant" label="Assistant" />
-          <QuickLink href="/integrations" label="Integrations" />
-        </div>
-      </section>
-
-      {/* RECENT ACTIVITY ------------------------------------------------- */}
-      {latestEvents.length > 0 ? (
-        <section className="space-y-2">
-          <div className="flex items-baseline justify-between">
-            <h2 className="text-sm font-medium text-zinc-500 dark:text-zinc-400">
-              Recent activity
-            </h2>
-            <Link
-              href="/log"
-              className="text-xs text-zinc-500 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-zinc-50"
-            >
-              full log →
-            </Link>
-          </div>
-          <ul className="space-y-1">
-            {latestEvents.map((e, idx) => (
-              <li
-                key={`${e.occurred_at}-${idx}`}
-                className="rounded-md border border-zinc-200 p-3 dark:border-zinc-800"
-              >
-                <div className="flex items-baseline justify-between gap-3">
-                  <span className="text-sm font-medium">
-                    {e.title ?? e.event_type}
-                  </span>
-                  <span className="shrink-0 text-xs text-zinc-500 dark:text-zinc-400">
-                    {formatDateTime(e.occurred_at)}
-                  </span>
-                </div>
-                {e.summary ? (
-                  <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-                    {e.summary}
-                  </p>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
+      <HomeDashboard
+        widgets={widgets}
+        initialOrder={normalizeOrder(savedLayout?.order)}
+        initialHidden={normalizeHidden(savedLayout?.hidden)}
+      />
     </div>
   );
 }
 
-// Hour-of-day greeting. Server-rendered uses server clock; for personal
-// use this is fine - small TZ skew between 12am-1am is harmless.
+// Hour-of-day greeting. Server clock; small TZ skew at midnight is harmless for
+// personal use.
 function greeting(): string {
   const h = new Date().getHours();
   if (h < 5) return "Up late";
@@ -372,15 +235,4 @@ function greeting(): string {
   if (h < 17) return "Good afternoon";
   if (h < 22) return "Good evening";
   return "Wind down";
-}
-
-function QuickLink({ href, label }: { href: string; label: string }) {
-  return (
-    <Link
-      href={href}
-      className="flex min-h-16 items-center justify-center rounded-lg border border-zinc-200 bg-white px-3 py-3 text-sm font-medium shadow-sm transition-colors hover:border-zinc-400 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:hover:border-zinc-600 dark:hover:bg-zinc-900"
-    >
-      {label}
-    </Link>
-  );
 }

@@ -3,6 +3,8 @@
 
 import type { SelectHTMLAttributes, ReactNode } from "react";
 
+import { FIELD_CONTROL_CLASS } from "./fieldStyles";
+
 export function Select({
   className = "",
   children,
@@ -10,7 +12,7 @@ export function Select({
 }: SelectHTMLAttributes<HTMLSelectElement> & { children: ReactNode }) {
   return (
     <select
-      className={`min-h-11 w-full appearance-none rounded-md border border-zinc-300 bg-white bg-[length:18px_18px] bg-[right_0.75rem_center] bg-no-repeat px-3 py-2 pr-9 text-sm shadow-sm focus:border-zinc-950 focus:outline-none focus:ring-1 focus:ring-zinc-950 dark:border-zinc-700 dark:bg-zinc-900 dark:focus:border-zinc-50 dark:focus:ring-zinc-50 ${className}`}
+      className={`${FIELD_CONTROL_CLASS} appearance-none bg-[length:18px_18px] bg-[right_0.75rem_center] bg-no-repeat pr-9 ${className}`}
       style={{
         // Inline SVG chevron so we don't need an icon library or extra files.
         backgroundImage:

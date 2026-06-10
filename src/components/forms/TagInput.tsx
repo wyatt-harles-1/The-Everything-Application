@@ -45,18 +45,18 @@ export function TagInput({
 
   return (
     <div className="space-y-2">
-      <div className="flex flex-wrap items-center gap-1.5 rounded-md border border-zinc-300 bg-white p-1.5 focus-within:border-zinc-950 focus-within:ring-1 focus-within:ring-zinc-950 dark:border-zinc-700 dark:bg-zinc-900 dark:focus-within:border-zinc-50 dark:focus-within:ring-zinc-50">
+      <div className="flex flex-wrap items-center gap-1.5 rounded-[var(--radius-card)] border border-border bg-surface p-1.5 focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/30">
         {tags.map((t) => (
           <span
             key={t}
-            className="inline-flex items-center gap-1 rounded bg-zinc-100 px-2 py-1 text-xs dark:bg-zinc-800"
+            className="inline-flex items-center gap-1 rounded-md bg-hover px-2 py-1 text-xs text-text"
           >
             {t}
             <button
               type="button"
               aria-label={`Remove ${t}`}
               onClick={() => remove(t)}
-              className="-mr-0.5 leading-none text-zinc-500 hover:text-zinc-950 dark:text-zinc-400 dark:hover:text-zinc-50"
+              className="-mr-0.5 leading-none text-muted hover:text-text"
             >
               ×
             </button>
@@ -69,7 +69,7 @@ export function TagInput({
           onKeyDown={onKey}
           onBlur={() => commit(draft)}
           placeholder={tags.length === 0 ? placeholder : ""}
-          className="min-h-9 flex-1 bg-transparent px-1 py-1 text-sm outline-none placeholder:text-zinc-400 dark:placeholder:text-zinc-500"
+          className="min-h-9 flex-1 bg-transparent px-1 py-1 text-sm text-text outline-none placeholder:text-muted"
         />
       </div>
       {/* Hidden input carries the committed tags into the Server Action. */}

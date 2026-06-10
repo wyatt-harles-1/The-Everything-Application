@@ -66,3 +66,29 @@ export const scheduledEventSchema = z.object({
 });
 
 export type ScheduledEventInput = z.infer<typeof scheduledEventSchema>;
+
+// Validation for acceptSuggestion(), the tool-shaped action invoked both by the
+// suggestions panel and (per invariant #7) by the assistant's master agent. It
+// differs from scheduledEventSchema in two ways: scheduled_for arrives as an
+// already-formatted string (kept as-is for the insert, but validated as a real
+// date), and event_type is bounded free text rather than the form's enum —
+// the DB column is intentionally free text so the agent can schedule novel
+// event types without a migration. Bounds prevent oversized / garbage rows
+// from reaching the timeline (RLS already scopes ownership).
+export const acceptSuggestionSchema = z.object({
+  scheduled_for: z
+    .string()
+    .trim()
+    .min(1, "scheduled_for is required")
+    .refine((s) => !Number.isNaN(Date.parse(s)), "scheduled_for is not a valid date"),
+  domain: z.enum(scheduledEventDomains),
+  event_type: z.string().trim().min(1, "event_type is required").max(64),
+  title: z.string().trim().min(1, "title is required").max(200),
+  notes: z
+    .preprocess(
+      (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+      z.string().max(2000).nullish(),
+    ),
+});
+
+export type AcceptSuggestionInput = z.infer<typeof acceptSuggestionSchema>;

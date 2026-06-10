@@ -7,7 +7,7 @@
 > checklists and the **Current focus** section as work lands, so this file is always the handoff
 > point between sessions.
 
-**Last updated:** 2026-06-02
+**Last updated:** 2026-06-03
 
 ---
 
@@ -125,6 +125,12 @@ See `README.md` for setup and day-to-day commands.
   helpers in `sources.ts`, `src/app/api/integrations/oura/*`). Tokens use form-encoded OAuth.
   Readiness is wired into the AI: a `query_readiness` read tool (master + health specialist) and
   the health coach's daily context both see recovery, so the assistant can correlate it with training.
+- **Auto-sync (Phase 5b):** daily **Vercel Cron** (`vercel.json` → `/api/cron/sync`, 08:00 UTC)
+  pulls every active integration without a button press. Shared sync cores in
+  `src/lib/integrations/sync.ts` run from both the manual "Sync now" actions (RLS client) and the
+  cron (service-role admin client, explicit `user_id` per source). Route is gated by `CRON_SECRET`
+  (Vercel sends it as the Bearer) and exempt from the passcode middleware. Idempotent + incremental,
+  so a daily re-run is safe.
 - **Operational lock:** site-wide passcode gate at `/gate` — controlled by the `SITE_PASSCODE`
   env var, custom Life Hub-styled passcode page, HttpOnly + Secure cookie holds a SHA-256 hash
   (cleartext never stored), sits in front of Supabase auth. Toggle on/off by setting or removing
@@ -207,7 +213,7 @@ Apple/Google/Samsung are a *later* companion-app effort, not a quick OAuth conne
 | · 4e | AI assistant (chat → tools → memory → coach → multi-agent) | ✅ |
 | **5** | **Wellness integrations** (current) | 🚧 Strava live |
 | · 5a | Strava: OAuth connect + manual "Sync now" | ✅ verified in prod |
-| · 5b | Strava auto-sync (webhooks or cron) | ⬜ |
+| · 5b | Auto-sync (Strava + Oura) — daily Vercel Cron | ✅ |
 | · 5c | Oura connector (sleep + readiness/HRV) | ✅ |
 | · 5c+ | More cloud-API connectors (Fitbit, Withings, Cronometer) | ⬜ |
 | · 5d | On-device hubs (Apple Health / Google Health Connect / Samsung) — needs a companion app | ⬜ |
@@ -218,6 +224,11 @@ Apple/Google/Samsung are a *later* companion-app effort, not a quick OAuth conne
 ## 7. Current focus — pick up here
 
 **Just landed:**
+- **Phase 5b — auto-sync** (this session): daily Vercel Cron (`/api/cron/sync`, `vercel.json`) syncs
+  Strava + Oura without a button. Sync logic extracted to `src/lib/integrations/sync.ts` (shared by
+  the manual actions + cron via the admin client); gated by `CRON_SECRET`; `/api/cron` exempt from
+  the passcode gate. Typecheck + lint + build green. **Not yet committed/pushed; needs `CRON_SECRET`
+  set in Vercel to actually run.**
 - **Phase 5c — Oura connector (sleep + recovery)** built + committed (`4593784`, CI green).
   OAuth connect + manual "Sync now"; sleep → `wellness.sleep_sessions`, readiness → new
   `wellness.readiness` table; health hub Recovery card. Migration applied to the hosted DB.
@@ -228,17 +239,18 @@ Apple/Google/Samsung are a *later* companion-app effort, not a quick OAuth conne
 - **Strava (5a) is LIVE and verified in prod** — connect → sync confirmed working.
 - Integrations strategy recorded in §5 (cloud-API vs on-device).
 
-**Open follow-ups / to finish Oura Wave:**
-- **Register an Oura app** (https://cloud.ouraring.com/oauth/applications) → set `OURA_CLIENT_ID` /
-  `OURA_CLIENT_SECRET` in Vercel; **Redirect URI** = `https://projectkosmos.com/api/integrations/oura/callback`.
-- **Manual E2E**: connect → "Sync now" → nights land in `sleep_sessions` + `readiness`, Recovery
-  card shows, re-sync skips dupes.
+**Open follow-ups (env/config — external):**
+- **Set `CRON_SECRET` in Vercel** (any 32-byte hex) so the daily auto-sync actually runs. Test:
+  `curl -H "Authorization: Bearer <secret>" https://projectkosmos.com/api/cron/sync` → JSON summary;
+  Vercel → Settings → Cron Jobs can also "Run" it on demand.
+- **Register an Oura app** → set `OURA_CLIENT_ID` / `OURA_CLIENT_SECRET` in Vercel; **Redirect URI**
+  = `https://projectkosmos.com/api/integrations/oura/callback`. Then connect at `/integrations`.
 - Still untested in a browser: multi-agent assistant, Phase 4e6 coach cards. Add `SITE_PASSCODE` to
   Vercel Preview env.
 
 **Decision pending — what's next:**
-- (a) **Auto-sync (5b)** for Strava + Oura (webhooks or Vercel cron — no button press), or
-- (b) **Next connector** (Withings → weight, or Fitbit), or
+- (a) **Next connector** — Withings (weight) or Fitbit (steps), or
+- (b) **Bloodwork module UI + AI doctor** (tables exist; no UI/interpretation yet), or
 - (c) Tech debt: timezone-aware pass, deployment hardening (preview DB, DMARC, health monitoring).
 
 _Update this section at the end of each session so the next one starts here._

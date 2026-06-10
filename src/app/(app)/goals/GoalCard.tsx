@@ -39,17 +39,17 @@ export function GoalCard({ goal }: { goal: GoalForCard }) {
   return (
     <Link
       href={`/goals/${goal.id}`}
-      className={`block rounded-md border p-3 transition-colors ${
+      className={`block rounded-[var(--radius-card)] border p-3 transition-colors ${
         overdue
-          ? "border-amber-300 bg-amber-50/40 hover:bg-amber-50 dark:border-amber-700 dark:bg-amber-950/30 dark:hover:bg-amber-950/50"
-          : "border-zinc-200 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900"
+          ? "border-warn/40 bg-warn-soft hover:bg-warn-soft"
+          : "border-border bg-surface hover:bg-hover"
       }`}
     >
       <div className="flex items-baseline justify-between gap-3">
-        <span className="text-sm font-medium">
+        <span className="text-sm font-medium text-text">
           {goal.title}
           <span
-            className="ml-1.5 text-[10px] uppercase tracking-wider text-zinc-500 dark:text-zinc-400"
+            className="ml-1.5 text-[10px] uppercase tracking-wider text-muted"
             aria-label={`priority ${goal.priority}`}
           >
             P{goal.priority}
@@ -58,9 +58,7 @@ export function GoalCard({ goal }: { goal: GoalForCard }) {
         {goal.target_date ? (
           <span
             className={`shrink-0 text-xs tabular-nums ${
-              overdue
-                ? "text-amber-700 dark:text-amber-300"
-                : "text-zinc-500 dark:text-zinc-400"
+              overdue ? "text-warn" : "text-muted"
             }`}
           >
             {days != null && days >= 0
@@ -69,7 +67,7 @@ export function GoalCard({ goal }: { goal: GoalForCard }) {
           </span>
         ) : null}
       </div>
-      <p className="mt-0.5 text-[11px] uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+      <p className="mt-0.5 text-[11px] uppercase tracking-wider text-muted">
         {goal.domain}
         {goal.category ? ` · ${goal.category}` : ""}
         {targetSummary ? ` · ${targetSummary}` : ""}

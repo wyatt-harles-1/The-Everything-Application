@@ -8,6 +8,8 @@
 
 import type { InputHTMLAttributes } from "react";
 
+import { FIELD_CONTROL_CLASS } from "./fieldStyles";
+
 export function DateTimePicker({
   className = "",
   ...props
@@ -15,7 +17,7 @@ export function DateTimePicker({
   return (
     <input
       type="datetime-local"
-      className={`min-h-11 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-zinc-950 focus:outline-none focus:ring-1 focus:ring-zinc-950 dark:border-zinc-700 dark:bg-zinc-900 dark:focus:border-zinc-50 dark:focus:ring-zinc-50 ${className}`}
+      className={`${FIELD_CONTROL_CLASS} ${className}`}
       {...props}
     />
   );

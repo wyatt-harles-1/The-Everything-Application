@@ -12,6 +12,7 @@ import { revalidatePath } from "next/cache";
 
 import {
   scheduledEventSchema,
+  acceptSuggestionSchema,
   type RecurrenceRuleInput,
 } from "@/lib/validation/scheduler";
 import { recordEvent } from "@/lib/db/events";
@@ -365,17 +366,29 @@ export async function acceptSuggestion(input: {
   const ctx = await getUserContext();
   if (!ctx) return { ok: false, error: "Not signed in" };
 
+  // Server Actions are public endpoints — this one is also a tool the assistant
+  // calls — so validate the input before it reaches the timeline. RLS scopes
+  // ownership; this guards integrity (valid domain, real date, bounded text).
+  const parsed = acceptSuggestionSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid suggestion",
+    };
+  }
+  const v = parsed.data;
+
   const { data, error } = await ctx.supabase
     .schema("shared")
     .from("scheduled_events")
     .insert({
       user_id: ctx.userId,
       source_id: ctx.sourceId,
-      domain: input.domain,
-      event_type: input.event_type,
-      scheduled_for: input.scheduled_for,
-      title: input.title,
-      notes: input.notes ?? null,
+      domain: v.domain,
+      event_type: v.event_type,
+      scheduled_for: v.scheduled_for,
+      title: v.title,
+      notes: v.notes ?? null,
     })
     .select("id")
     .single();

@@ -27,27 +27,27 @@ export function HabitCard({
   return (
     <Link
       href={`/habits/${habit.id}`}
-      className="block rounded-md border border-zinc-200 p-3 transition-colors hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900"
+      className="block rounded-[var(--radius-card)] border border-border bg-surface p-3 transition-colors hover:bg-hover"
     >
       <div className="flex items-baseline justify-between gap-3">
-        <span className="text-sm font-medium">{habit.name}</span>
-        <span className="shrink-0 text-xs tabular-nums text-zinc-500 dark:text-zinc-400">
+        <span className="text-sm font-medium text-text">{habit.name}</span>
+        <span className="shrink-0 text-xs tabular-nums text-muted">
           {progress.thisWeekCount}/{progress.target} this wk
         </span>
       </div>
-      <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
+      <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-hover">
         <div
           className={`h-full ${
             progress.thisWeekMet
-              ? "bg-emerald-500"
+              ? "bg-success"
               : progress.isStreakAlive
-                ? "bg-zinc-700 dark:bg-zinc-300"
-                : "bg-amber-400 dark:bg-amber-500"
+                ? "bg-muted"
+                : "bg-warn"
           }`}
           style={{ width: `${pct}%` }}
         />
       </div>
-      <p className="mt-1 text-[11px] uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+      <p className="mt-1 text-[11px] uppercase tracking-wider text-muted">
         {habit.domain}
         {habit.event_type ? ` · ${habit.event_type}` : ""} ·{" "}
         {progress.streakWeeks > 0

@@ -16,6 +16,7 @@ import type { LanguageModel } from "ai";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { decryptApiKey } from "./encryption";
+import { isManagedKeyAllowed } from "./managedKey";
 import { SUPPORTED_PROVIDERS, type Provider } from "./providers";
 
 export { SUPPORTED_PROVIDERS, type Provider };
@@ -78,6 +79,19 @@ export async function getModelForUser(
   // user's stored key.
   let apiKey: string;
   if (settings.use_managed_key) {
+    // The managed key bills the operator, so re-check authorization at the
+    // point of use (not just at save time) — this defends even if a row was
+    // written with use_managed_key=true before the allowlist existed, or via a
+    // direct DB edit. The per-request `supabase` client is the signed-in user's
+    // session, so getUser() returns the account that would be billed.
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!isManagedKeyAllowed(user?.email)) {
+      throw new AINotConfiguredError(
+        "This account isn't permitted to use the app's managed API key. Add your own provider API key in /assistant/settings.",
+      );
+    }
     const envKey = process.env[MANAGED_KEY_ENV[provider]];
     if (!envKey) {
       throw new AINotConfiguredError(
