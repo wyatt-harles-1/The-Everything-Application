@@ -136,8 +136,7 @@ See `README.md` for setup and day-to-day commands.
   env var, custom Kosmos-styled passcode page, HttpOnly + Secure cookie holds a SHA-256 hash
   (cleartext never stored), sits in front of Supabase auth. Toggle on/off by setting or removing
   the env var in Vercel.
-- **UI redesign + Kosmos rebrand (Milestones 1–2)** *(on `redesign/milestone-2`, PR #2 — merges
-  to `main` pending review)*:
+- **UI redesign + Kosmos rebrand (Milestones 1–2)** *(merged to `main` + live in prod 2026-06-10)*:
   - **M1 — design system + shell:** semantic design tokens in `globals.css` (light/dark/amoled
     themes, 6 accent colors, density) with FOUC-free persistence (cookie mirror +
     `shared.user_preferences`); app shell with desktop sidebar + mobile bottom tab bar
@@ -238,7 +237,7 @@ Apple/Google/Samsung are a *later* companion-app effort, not a quick OAuth conne
 
 ## 7. Current focus — pick up here
 
-**Just landed (2026-06-09, on branch `redesign/milestone-2` — PR #2 open, not yet merged to `main`):**
+**Just landed (2026-06-09; merged to `main` + deployed to prod 2026-06-10 via PRs #1/#2):**
 - **UI redesign Milestone 1** (`584cd42`): the soft/airy design-system foundation. Semantic design
   tokens in `globals.css` (light/dark/amoled themes, 6 accent colors, density) with FOUC-free
   persistence (cookie + `shared.user_preferences`); new app shell (desktop sidebar + mobile bottom
@@ -254,9 +253,11 @@ Apple/Google/Samsung are a *later* companion-app effort, not a quick OAuth conne
   service worker, offline page, icons); **rebrand Life Hub → Kosmos**.
 - Earlier this month (already on `main`): Phase 5b auto-sync, Phase 5c Oura connector, and the
   readiness → AI wiring are all committed (`bc81515` and prior) — see §5 for detail.
+- **Redesign is LIVE:** both milestone branches merged (CI green), prod deploy completed, both
+  June 9 migrations (`revoke_anon_table_grants`, `shared_user_preferences`) confirmed applied to
+  the hosted DB, and the PWA manifest serves the Kosmos branding in prod.
 
 **Open follow-ups:**
-- **Merge PR #2** (`redesign/milestone-2` → `main`) once reviewed; prod deploys from `main`.
 - **Set `CRON_SECRET` in Vercel** (any 32-byte hex) so the daily auto-sync actually runs. Test:
   `curl -H "Authorization: Bearer <secret>" https://projectkosmos.com/api/cron/sync` → JSON summary;
   Vercel → Settings → Cron Jobs can also "Run" it on demand.
