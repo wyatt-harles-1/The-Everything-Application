@@ -7,17 +7,17 @@
 > checklists and the **Current focus** section as work lands, so this file is always the handoff
 > point between sessions.
 
-**Last updated:** 2026-06-10
+**Last updated:** 2026-06-11
 
 ---
 
 ## 1. Purpose
 
 Kosmos (formerly "Life Hub"; repo name "The Everything Application") is a personal
-life-management system that pulls every
-meaningful thing in my life — training, health, habits, goals, schedule, and eventually finances
-and more — into one private, queryable place. Data comes from two sources: things I log by hand,
-and (later) third-party services that sync automatically (Strava, Cronometer, Apple Health, Plaid).
+life-management system that pulls every meaningful thing in my life — training, health, habits,
+goals, schedule, and eventually finances and more — into one private, queryable place. Data arrives three ways: things I log by hand in
+Kosmos, cloud APIs that sync automatically (Strava today), and imports from the best-of-breed
+apps I actually track my life with (Strong for lifting, Cronometer for food, 8 Sleep for sleep).
 
 Everything lands on a single chronological timeline backed by Postgres, so an AI assistant can
 reason across all of it ("how did my sleep affect my lifts last month?") instead of each feature
@@ -25,13 +25,20 @@ living in its own silo.
 
 ## 2. Goals & vision
 
-- **One hub, many modules.** Kosmos is where the whole ecosystem comes together. Each module
-  (lifting, running, health, scheduler, finance…) might *later* run as its own standalone app or
-  subdomain — but the hub always owns the cross-cutting features: scheduler/planner, goal tracking,
-  and an AI expert with access to all my data across every module.
-- **Preserve optionality.** Undecided on whether modules ever ship to other people. So: don't
-  extract anything yet, but keep the architecture clean enough that extraction is a mechanical
-  move later, not a rewrite.
+- **One database for your whole life.** Every tracker — Kosmos-native or third-party — feeds the
+  same unified timeline. Kosmos is the aggregation and intelligence layer on top: the place where
+  sleep, training, food, mood, and (later) money can finally be queried together.
+- **Hybrid tracking, imports first-class.** The apps I already use are better capture tools than
+  anything I'd rebuild, so they stay primary where they're strong: **Strong** for lifting,
+  **Cronometer** for food, **8 Sleep** for sleep, **Strava** for cardio. Kosmos's own logging UIs
+  are primary for everything those apps don't cover (mood, meds, habits, goals, bloodwork) and a
+  fallback everywhere else. Getting external data in is a core feature, not an afterthought.
+- **The Office-suite model.** Kosmos is the suite; each life aspect (training, food, sleep,
+  finance, …) eventually becomes its own polished app — like Word / Excel / PowerPoint, but for
+  aspects of one's life — all integrating smoothly into the same ecosystem: one timeline, one
+  goals system, one AI that sees everything. Architecture invariant #6 ("apps are organizational
+  units, not data boundaries") is what keeps that extraction a mechanical move later, not a
+  rewrite — so nothing gets extracted yet, but nothing closes the door either.
 - **AI that actually knows me.** The end state is an assistant that can read any of my data, make
   changes on my behalf (with approval), and give genuinely useful, personalized coaching — because
   it sees everything, not one slice.
@@ -115,8 +122,8 @@ See `README.md` for setup and day-to-day commands.
   `/integrations`. Imports all cardio types (run/ride/swim/walk → workouts + cardio_sessions,
   others → bare workout) onto the universal timeline, tagged to a `provider='strava'` source.
   Tokens stored encrypted in `sources.config` (reuses `encryption.ts` + `AI_SETTINGS_MASTER_KEY`);
-  idempotent via a `(source_id, external_id)` unique index. Auto-sync (webhooks/cron) is the next
-  wave. Code: `src/lib/integrations/{strava,sources}.ts`, `src/app/api/integrations/strava/*`,
+  idempotent via a `(source_id, external_id)` unique index. Auto-sync landed in Phase 5b (below).
+  Code: `src/lib/integrations/{strava,sources}.ts`, `src/app/api/integrations/strava/*`,
   `src/app/(app)/integrations/*`.
 - **Integrations — Oura (Phase 5c):** OAuth connect + manual "Sync now" at `/integrations`.
   Imports main nightly **sleep** → `wellness.sleep_sessions` (quality from efficiency; HRV/RHR in
@@ -126,6 +133,8 @@ See `README.md` for setup and day-to-day commands.
   helpers in `sources.ts`, `src/app/api/integrations/oura/*`). Tokens use form-encoded OAuth.
   Readiness is wired into the AI: a `query_readiness` read tool (master + health specialist) and
   the health coach's daily context both see recovery, so the assistant can correlate it with training.
+  **Status: dormant** — built and kept as the reference cloud-API connector, but I don't use an
+  Oura ring (decided 2026-06-11); sleep data will come from 8 Sleep instead.
 - **Auto-sync (Phase 5b):** daily **Vercel Cron** (`vercel.json` → `/api/cron/sync`, 08:00 UTC)
   pulls every active integration without a button press. Shared sync cores in
   `src/lib/integrations/sync.ts` run from both the manual "Sync now" actions (RLS client) and the
@@ -152,10 +161,11 @@ See `README.md` for setup and day-to-day commands.
 
 ### 🔭 Wanted but not started
 
-- **Wellness integrations (Phase 5) — remaining:** **auto-sync** for Strava + Oura (webhooks or
-  cron; today both are manual "Sync now"); more **cloud-API** connectors (Fitbit/Withings for
-  steps/weight; Cronometer for nutrition); on-device hubs (Apple Health / Google Health Connect /
-  Samsung) need a **companion app** — see the Integrations strategy note above.
+- **Personal-stack integrations (Phase 5 — remaining):** **Strong CSV import** (lifting →
+  existing workout/lifting tables), **Cronometer CSV import** (food → meals/nutrition), and an
+  **8 Sleep connector** (unofficial API → `wellness.sleep_sessions`). Manual file upload is the
+  v1 for the CSV pair; see the Integrations strategy below. On-device hubs (Apple Health /
+  Google Health Connect / Samsung) still need a **companion app** — a later, separate effort.
 - **Bloodwork module + AI doctor:** tables exist; the module UI and AI interpretation don't.
 - **Finance domain + AI financial advisor:** Plaid sync, `finance` schema, advisor agent.
 - **Knowledge domain:** reserved, undefined.
@@ -181,20 +191,31 @@ See `README.md` for setup and day-to-day commands.
 
 ### 🔌 Integrations strategy (how Phase 5+ sources connect)
 
-The decision that shapes the whole integrations roadmap: **health data sources split into two
-camps, and only one is reachable from a web backend.**
+The decision that shapes the whole integrations roadmap: **data sources split into three camps,
+and only the first is cleanly reachable from a web backend.**
 
 1. **Cloud-API services** — expose an OAuth web API we can pull from Kosmos's server, exactly
-   like Strava. These are the ones we build server-side connectors for:
-   - **Strava** — workouts/activities (✅ connected). Not an everything-aggregator, but it *does*
+   like Strava. These get server-side connectors:
+   - **Strava** — workouts/activities (✅ live). Not an everything-aggregator, but it *does*
      aggregate workouts: Garmin / Apple Watch / Wahoo / Peloton etc. push activities into Strava,
      so it's the single best source for **training**. It has no sleep / nutrition / body / all-day HR.
-   - **Oura, Whoop, Fitbit** — sleep, recovery, HR (good web APIs).
-   - **Withings** — body weight, BP, sleep.
-   - **Garmin** — comprehensive, but partner-approval required.
-   - **Cronometer** — nutrition, but the API is gated/partner.
+   - **Oura** — sleep/recovery (✅ built, dormant — no ring; kept as the reference connector).
+   - **8 Sleep** — sleep. *No official public API*, but a well-documented **unofficial OAuth2
+     API** that community projects rely on (Home Assistant integration, `pyEight`, `eightctl`) —
+     connector-shaped like Strava/Oura, with the caveat Eight Sleep may change endpoints without
+     notice.
+   - Fitbit / Whoop / Withings / Garmin — good APIs, but **not in my stack**; only if ever needed.
 
-2. **On-device platforms — NO web API exists** (the big gotcha):
+2. **File-export apps — no usable API, but an official CSV export.** The path here is an
+   **import pipeline**: export from the app, upload at `/integrations`, parse into the same
+   domain tables + timeline (tagged to a `provider` source row, idempotent like the connectors):
+   - **Strong** (lifting) — no API at all; clean CSV export (date, workout, exercise, set order,
+     weight, reps, …).
+   - **Cronometer** (food) — public API is partner-gated; official CSV exports (servings,
+     biometrics, exercises). Later option: automate pulls via its unofficial export endpoint
+     (the GWT-RPC calls the web app itself uses — cf. the `gocronometer` library).
+
+3. **On-device platforms — NO web API exists** (the big gotcha):
    - **Apple Health (HealthKit)** — iOS, data lives on the phone; no server endpoint.
    - **Google** — Fit's REST API was deprecated; its successor **Health Connect** is on-device Android only.
    - **Samsung Health** — on-device Android SDK, partner-only.
@@ -203,10 +224,20 @@ camps, and only one is reachable from a web backend.**
    API — a separate project. The only no-code fallback is manual export/import (e.g. the Apple
    Health XML zip).
 
+**The actual stack (what I track my life with today):**
+
+| Life aspect | App | Path into Kosmos |
+| --- | --- | --- |
+| Cardio / activities | Strava | ✅ cloud-API connector, live + daily cron |
+| Lifting | Strong | CSV import (no API exists) |
+| Food | Cronometer | CSV import first; unofficial export endpoint later |
+| Sleep | 8 Sleep | Connector on the unofficial API |
+| Finances | Several apps | Deferred to the finance phase — much larger undertaking |
+
 **Implication:** there is no single magic source to "pull everything" from server-side. Kosmos
-gets **one connector per data domain**, each from the best cloud-API service (workouts → Strava,
-sleep/HR → Oura/Fitbit, weight → Withings, …). The `shared.sources` + universal `events` design
-already makes each new connector mechanical — it's just another source row feeding the same tables.
+gets **one pathway per life aspect**, matched to the app I actually use — and the
+`shared.sources` + universal `events` design makes each one mechanical: a CSV importer and an
+OAuth connector are just different feeders for the same source rows and tables.
 Apple/Google/Samsung are a *later* companion-app effort, not a quick OAuth connector.
 
 ---
@@ -225,13 +256,14 @@ Apple/Google/Samsung are a *later* companion-app effort, not a quick OAuth conne
 | · 4c | Main dashboard redesign | ✅ |
 | · 4d | Module priority pass (running, health) | ✅ |
 | · 4e | AI assistant (chat → tools → memory → coach → multi-agent) | ✅ |
-| **5** | **Wellness integrations** (current) | 🚧 Strava live |
+| **5** | **Personal-stack integrations** (current) | 🚧 Strava live |
 | · 5a | Strava: OAuth connect + manual "Sync now" | ✅ verified in prod |
-| · 5b | Auto-sync (Strava + Oura) — daily Vercel Cron | ✅ |
-| · 5c | Oura connector (sleep + readiness/HRV) | ✅ |
-| · 5c+ | More cloud-API connectors (Fitbit, Withings, Cronometer) | ⬜ |
-| · 5d | On-device hubs (Apple Health / Google Health Connect / Samsung) — needs a companion app | ⬜ |
-| 6+ | Bloodwork + AI doctor, Finance + AI advisor, knowledge, extraction | ⬜ |
+| · 5b | Auto-sync — daily Vercel Cron | ✅ verified in prod |
+| · 5c | Oura connector (sleep + readiness/HRV) | ✅ built (dormant — no ring) |
+| · 5d | CSV import pipeline: shared upload UI at `/integrations`; Strong importer (lifting), Cronometer importer (food) | ⬜ |
+| · 5e | 8 Sleep connector (unofficial API → sleep_sessions) | ⬜ |
+| · 5f | On-device hubs (Apple Health / Google Health Connect / Samsung) — needs a companion app | ⬜ |
+| 6+ | Bloodwork + AI doctor, knowledge, standalone-app extraction; Finance + AI advisor (deferred — large undertaking) | ⬜ |
 
 ---
 
@@ -259,20 +291,25 @@ Apple/Google/Samsung are a *later* companion-app effort, not a quick OAuth conne
 - **Auto-sync (5b) verified in prod (2026-06-11):** `CRON_SECRET` set in Vercel; authenticated
   call to `/api/cron/sync` returned a JSON summary (Strava ran, incremental no-op as expected).
   The daily 08:00 UTC cron is live.
+- **Vision recorded (2026-06-11):** §2 now captures the Office-suite model (Kosmos = the suite;
+  life-aspect modules become standalone apps later) and the hybrid-tracking principle (imports
+  from my real apps primary, native logging secondary). §5/§6 re-pointed at the actual stack:
+  Strong (lifting), Cronometer (food), 8 Sleep (sleep). **Oura decision: no ring — connector
+  stays built but dormant**; its registration follow-up is dropped.
 
 **Open follow-ups:**
-- **Register an Oura app** → set `OURA_CLIENT_ID` / `OURA_CLIENT_SECRET` in Vercel; **Redirect URI**
-  = `https://projectkosmos.com/api/integrations/oura/callback`. Then connect at `/integrations`.
-  Oura E2E (real data through sleep/readiness/AI) still unverified.
 - Still untested in a browser: multi-agent assistant, Phase 4e6 coach cards. Add `SITE_PASSCODE` to
   Vercel Preview env.
 
-**Decision pending — what's next:**
-- (a) **Redesign Milestone 3** — roll the dashboard/chart template out to the other modules
-  (lifting, running), or
-- (b) **Next connector** — Withings (weight) or Fitbit (steps), or
-- (c) **Bloodwork module UI + AI doctor** (tables exist; no UI/interpretation yet), or
-- (d) Tech debt: timezone-aware pass, deployment hardening (preview DB, DMARC, health monitoring).
+**Next up — personal-stack integrations (order adjustable):**
+1. **Strong CSV import** (Phase 5d, first) — simplest format, and it maps onto the existing rich
+   lifting/workout tables; build the shared upload UI at `/integrations` with it.
+2. **Cronometer CSV import** (5d) — reuses the same upload pipeline.
+3. **8 Sleep connector** (5e) — unofficial API; shaped like the Strava/Oura connectors.
+
+After that, the bench: redesign Milestone 3 (roll the dashboard/chart template to lifting and
+running), bloodwork module UI + AI doctor, or the tech-debt pass (timezones, preview DB, DMARC,
+health monitoring).
 
 _Update this section at the end of each session so the next one starts here._
 
