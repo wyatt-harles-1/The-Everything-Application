@@ -256,11 +256,11 @@ Apple/Google/Samsung are a *later* companion-app effort, not a quick OAuth conne
 - **Redesign is LIVE:** both milestone branches merged (CI green), prod deploy completed, both
   June 9 migrations (`revoke_anon_table_grants`, `shared_user_preferences`) confirmed applied to
   the hosted DB, and the PWA manifest serves the Kosmos branding in prod.
+- **Auto-sync (5b) verified in prod (2026-06-11):** `CRON_SECRET` set in Vercel; authenticated
+  call to `/api/cron/sync` returned a JSON summary (Strava ran, incremental no-op as expected).
+  The daily 08:00 UTC cron is live.
 
 **Open follow-ups:**
-- **Set `CRON_SECRET` in Vercel** (any 32-byte hex) so the daily auto-sync actually runs. Test:
-  `curl -H "Authorization: Bearer <secret>" https://projectkosmos.com/api/cron/sync` → JSON summary;
-  Vercel → Settings → Cron Jobs can also "Run" it on demand.
 - **Register an Oura app** → set `OURA_CLIENT_ID` / `OURA_CLIENT_SECRET` in Vercel; **Redirect URI**
   = `https://projectkosmos.com/api/integrations/oura/callback`. Then connect at `/integrations`.
   Oura E2E (real data through sleep/readiness/AI) still unverified.
