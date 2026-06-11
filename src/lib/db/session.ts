@@ -19,7 +19,7 @@ export async function getUserContext() {
   const sourceId = await getManualSourceId(supabase, user.id);
   if (!sourceId) return null;
 
-  return { supabase, userId: user.id, sourceId };
+  return { supabase, userId: user.id, email: user.email ?? null, sourceId };
 }
 
 export type FormActionState =

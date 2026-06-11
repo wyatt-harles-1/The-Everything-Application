@@ -1,26 +1,185 @@
 @import "tailwindcss";
 
+/* =============================================================================
+   Design tokens — Milestone 1 UI redesign
+   -----------------------------------------------------------------------------
+   The whole app is themed through CSS custom properties on <html>:
+     - data-theme   = light | dark | amoled   (surface/text palette)
+     - data-accent  = indigo | emerald | rose | amber | violet | sky
+     - data-density = comfortable | compact    (spacing + control height)
+
+   Components reference SEMANTIC tokens (bg-surface, text-muted, border-border,
+   bg-accent, rounded-card, shadow-soft) rather than raw zinc/emerald colors, so
+   a single attribute flip on <html> re-skins everything with no per-page edits.
+   Legacy pages that still use Tailwind `dark:` utilities keep working because we
+   redefine the `dark` variant below to match our [data-theme] attributes.
+   ============================================================================ */
+
+/* Redefine Tailwind v4's `dark` variant: instead of the OS media query, `dark:`
+   utilities now apply under BOTH [data-theme=dark] and [data-theme=amoled].
+   :where(...) keeps specificity at 0 so these never out-rank real utilities.
+   This is what lets ~50 not-yet-migrated pages theme correctly for free. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *, [data-theme="amoled"], [data-theme="amoled"] *));
+
+/* ---- Light (default) ------------------------------------------------------ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg: #f6f6f4;            /* app canvas — warm near-white */
+  --surface: #ffffff;       /* cards / inputs */
+  --surface-raised: #ffffff;/* popovers / sheets (lifted via shadow) */
+  --hover: #f1f1ef;         /* subtle fill for hovered rows/items */
+  --border: #ebebe9;
+  --text: #18181b;
+  --text-muted: #6b7280;
+
+  --success: #16a34a; --success-fg: #ffffff; --success-soft: #f0fdf4;
+  --warn: #d97706;    --warn-fg: #ffffff;    --warn-soft: #fffbeb;
+  --danger: #dc2626;  --danger-fg: #ffffff;  --danger-soft: #fef2f2;
+
+  /* accent default; overridden by [data-accent] below */
+  --accent: #4f46e5; --accent-fg: #ffffff; --accent-soft: #eef2ff;
+
+  /* Categorical chart palette (multi-series). Single-series charts use
+     --accent so they pick up the user's accent; multi-series use these. Tuned
+     for white surfaces; dark/amoled lift the lightness below. */
+  --chart-1: #4f46e5; --chart-2: #059669; --chart-3: #d97706;
+  --chart-4: #e11d48; --chart-5: #0284c7; --chart-6: #7c3aed;
+
+  --radius-card: 1rem;      /* 16px */
+  --radius-lg: 1.25rem;     /* 20px — sheets/modals */
+  --radius-pill: 9999px;
+
+  --shadow-soft: 0 1px 2px rgb(0 0 0 / 0.04), 0 6px 20px rgb(0 0 0 / 0.06);
+  --shadow-pop: 0 12px 40px rgb(0 0 0 / 0.16);
+
+  /* back-compat aliases for any legacy bg-background / text-foreground usage */
+  --background: var(--bg);
+  --foreground: var(--text);
 }
 
+/* ---- Dark ----------------------------------------------------------------- */
+[data-theme="dark"] {
+  --bg: #18181b;
+  --surface: #232327;
+  --surface-raised: #2a2a2f;
+  --hover: #2d2d33;
+  --border: #34343b;
+  --text: #ededed;
+  --text-muted: #a1a1aa;
+
+  --success-soft: #052e1a;
+  --warn-soft: #2a1c05;
+  --danger-soft: #2a0e0e;
+  --accent-soft: #1e1b4b;
+
+  /* Brighter chart hues so series read on dark surfaces. */
+  --chart-1: #818cf8; --chart-2: #34d399; --chart-3: #fbbf24;
+  --chart-4: #fb7185; --chart-5: #38bdf8; --chart-6: #a78bfa;
+
+  --shadow-soft: 0 1px 2px rgb(0 0 0 / 0.3), 0 6px 20px rgb(0 0 0 / 0.4);
+  --shadow-pop: 0 12px 40px rgb(0 0 0 / 0.6);
+}
+
+/* ---- AMOLED (true black) -------------------------------------------------- */
+[data-theme="amoled"] {
+  --bg: #000000;
+  --surface: #0b0b0c;
+  --surface-raised: #141416;
+  --hover: #18181b;
+  --border: #222226;
+  --text: #f4f4f5;
+  --text-muted: #8b8b92;
+
+  --success-soft: #04240f;
+  --warn-soft: #221703;
+  --danger-soft: #220a0a;
+  --accent-soft: #14122e;
+
+  /* Same lifted chart hues as dark — they read well on true black too. */
+  --chart-1: #818cf8; --chart-2: #34d399; --chart-3: #fbbf24;
+  --chart-4: #fb7185; --chart-5: #38bdf8; --chart-6: #a78bfa;
+
+  --shadow-soft: none;       /* AMOLED reads off borders, not shadows */
+  --shadow-pop: 0 12px 40px rgb(0 0 0 / 0.8);
+}
+
+/* ---- Accent palette ------------------------------------------------------- */
+[data-accent="indigo"]  { --accent: #4f46e5; --accent-fg: #fff; --accent-soft: #eef2ff; }
+[data-accent="emerald"] { --accent: #059669; --accent-fg: #fff; --accent-soft: #ecfdf5; }
+[data-accent="rose"]    { --accent: #e11d48; --accent-fg: #fff; --accent-soft: #fff1f2; }
+[data-accent="amber"]   { --accent: #d97706; --accent-fg: #fff; --accent-soft: #fffbeb; }
+[data-accent="violet"]  { --accent: #7c3aed; --accent-fg: #fff; --accent-soft: #f5f3ff; }
+[data-accent="sky"]     { --accent: #0284c7; --accent-fg: #fff; --accent-soft: #f0f9ff; }
+
+/* Dark/AMOLED want deeper accent-soft tints so they don't glow. These come
+   AFTER the accent blocks so they win when both attributes are present. */
+[data-theme="dark"][data-accent="indigo"],  [data-theme="amoled"][data-accent="indigo"]  { --accent-soft: #1e1b4b; }
+[data-theme="dark"][data-accent="emerald"], [data-theme="amoled"][data-accent="emerald"] { --accent-soft: #052e1a; }
+[data-theme="dark"][data-accent="rose"],    [data-theme="amoled"][data-accent="rose"]    { --accent-soft: #3f0a17; }
+[data-theme="dark"][data-accent="amber"],   [data-theme="amoled"][data-accent="amber"]   { --accent-soft: #2a1c05; }
+[data-theme="dark"][data-accent="violet"],  [data-theme="amoled"][data-accent="violet"]  { --accent-soft: #2a1259; }
+[data-theme="dark"][data-accent="sky"],     [data-theme="amoled"][data-accent="sky"]     { --accent-soft: #0a2a3f; }
+
+/* ---- Density -------------------------------------------------------------- */
+:root,
+[data-density="comfortable"] {
+  --space-card: 1rem;       /* card padding */
+  --control-h: 2.75rem;     /* 44px tap target */
+  --gap-section: 1.5rem;    /* between dashboard sections */
+}
+[data-density="compact"] {
+  --space-card: 0.6875rem;  /* 11px */
+  --control-h: 2.375rem;    /* 38px */
+  --gap-section: 1rem;
+}
+
+/* ---- Expose tokens to Tailwind utilities ---------------------------------- */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-hover: var(--hover);
+  --color-border: var(--border);
+  --color-text: var(--text);
+  --color-muted: var(--text-muted);
+
+  --color-accent: var(--accent);
+  --color-accent-fg: var(--accent-fg);
+  --color-accent-soft: var(--accent-soft);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-chart-6: var(--chart-6);
+
+  --color-success: var(--success);
+  --color-success-fg: var(--success-fg);
+  --color-success-soft: var(--success-soft);
+  --color-warn: var(--warn);
+  --color-warn-fg: var(--warn-fg);
+  --color-warn-soft: var(--warn-soft);
+  --color-danger: var(--danger);
+  --color-danger-fg: var(--danger-fg);
+  --color-danger-soft: var(--danger-soft);
+
+  /* back-compat */
+  --color-background: var(--bg);
+  --color-foreground: var(--text);
+
+  --radius-card: var(--radius-card);
+  --radius-lg: var(--radius-lg);
+  --radius-pill: var(--radius-pill);
+
+  --shadow-soft: var(--shadow-soft);
+  --shadow-pop: var(--shadow-pop);
+
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans), system-ui, sans-serif;
 }

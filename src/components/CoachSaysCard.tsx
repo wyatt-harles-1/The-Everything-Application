@@ -61,23 +61,23 @@ export function CoachSaysCard({ domain }: { domain: CoachDomain }) {
   }, [domain]);
 
   return (
-    <section className="space-y-2 rounded-lg border border-violet-200 bg-violet-50/40 p-3 dark:border-violet-900 dark:bg-violet-950/30">
+    <section className="space-y-2 rounded-[var(--radius-card)] border border-border bg-accent-soft p-3">
       <div className="flex items-baseline justify-between gap-3">
-        <h2 className="text-xs font-medium uppercase tracking-wider text-violet-700 dark:text-violet-300">
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-accent">
           Coach says
         </h2>
-        <div className="flex shrink-0 items-center gap-2 text-xs">
+        <div className="flex shrink-0 items-center gap-3 text-xs">
           <button
             type="button"
             onClick={() => load(true)}
             disabled={refreshing || state.kind === "loading"}
-            className="text-violet-700 underline underline-offset-4 hover:text-violet-900 disabled:opacity-50 dark:text-violet-300 dark:hover:text-violet-100"
+            className="font-medium text-accent hover:opacity-80 disabled:opacity-50"
           >
             {refreshing ? "…" : "refresh"}
           </button>
           <Link
             href="/assistant"
-            className="text-violet-700 underline underline-offset-4 hover:text-violet-900 dark:text-violet-300 dark:hover:text-violet-100"
+            className="font-medium text-accent hover:opacity-80"
           >
             ask →
           </Link>
@@ -85,11 +85,11 @@ export function CoachSaysCard({ domain }: { domain: CoachDomain }) {
       </div>
 
       {state.kind === "loading" ? (
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">…</p>
+        <p className="text-sm text-muted">…</p>
       ) : state.kind === "ready" ? (
-        <p className="text-sm leading-snug">{state.advice}</p>
+        <p className="text-sm leading-snug text-text">{state.advice}</p>
       ) : state.aiNotConfigured ? (
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">
+        <p className="text-sm text-muted">
           Set up the assistant on{" "}
           <Link
             href="/assistant/settings"
@@ -100,9 +100,7 @@ export function CoachSaysCard({ domain }: { domain: CoachDomain }) {
           to enable daily coach advice here.
         </p>
       ) : (
-        <p className="text-sm text-amber-700 dark:text-amber-300">
-          {state.message}
-        </p>
+        <p className="text-sm text-warn">{state.message}</p>
       )}
     </section>
   );

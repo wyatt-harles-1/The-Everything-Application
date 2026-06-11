@@ -31,29 +31,24 @@ export function FormField({
           {label}
           {required ? (
             <span
-              className="ml-1 text-base font-bold text-red-600 dark:text-red-400"
+              className="ml-1 text-base font-bold text-danger"
               aria-label="required"
             >
               *
             </span>
           ) : (
-            <span className="ml-1.5 text-xs font-normal text-zinc-400 dark:text-zinc-500">
+            <span className="ml-1.5 text-xs font-normal text-muted">
               optional
             </span>
           )}
         </span>
         {hint ? (
-          <span className="text-xs font-normal text-zinc-500 dark:text-zinc-400">
-            {hint}
-          </span>
+          <span className="text-xs font-normal text-muted">{hint}</span>
         ) : null}
       </label>
       {children}
       {error ? (
-        <p
-          role="alert"
-          className="text-xs text-red-600 dark:text-red-400"
-        >
+        <p role="alert" className="text-xs text-danger">
           {error}
         </p>
       ) : null}

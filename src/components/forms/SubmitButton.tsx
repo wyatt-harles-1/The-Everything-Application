@@ -23,7 +23,7 @@ export function SubmitButton({
       type="submit"
       disabled={pending}
       aria-busy={pending}
-      className={`min-h-11 w-full rounded-md bg-zinc-950 px-4 py-2 text-sm font-medium text-white shadow-sm transition-colors hover:bg-zinc-800 disabled:opacity-60 dark:bg-zinc-50 dark:text-zinc-950 dark:hover:bg-zinc-200 ${className}`}
+      className={`min-h-[var(--control-h)] w-full rounded-[var(--radius-card)] bg-accent px-4 py-2 text-sm font-semibold text-accent-fg shadow-soft transition-opacity hover:opacity-90 disabled:opacity-60 ${className}`}
     >
       {pending ? (pendingLabel ?? "Saving…") : children}
     </button>

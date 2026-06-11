@@ -1,4 +1,4 @@
-# Life Hub — Project Plan & Status
+# Kosmos — Project Plan & Status
 
 > **Living document.** This is the north star and the current state of the project in one place:
 > what we're building, why, what's done, what's left, and what we're working on right now.
@@ -7,13 +7,14 @@
 > checklists and the **Current focus** section as work lands, so this file is always the handoff
 > point between sessions.
 
-**Last updated:** 2026-06-02
+**Last updated:** 2026-06-10
 
 ---
 
 ## 1. Purpose
 
-Life Hub ("The Everything Application") is a personal life-management system that pulls every
+Kosmos (formerly "Life Hub"; repo name "The Everything Application") is a personal
+life-management system that pulls every
 meaningful thing in my life — training, health, habits, goals, schedule, and eventually finances
 and more — into one private, queryable place. Data comes from two sources: things I log by hand,
 and (later) third-party services that sync automatically (Strava, Cronometer, Apple Health, Plaid).
@@ -24,7 +25,7 @@ living in its own silo.
 
 ## 2. Goals & vision
 
-- **One hub, many modules.** The Life Hub is where the whole ecosystem comes together. Each module
+- **One hub, many modules.** Kosmos is where the whole ecosystem comes together. Each module
   (lifting, running, health, scheduler, finance…) might *later* run as its own standalone app or
   subdomain — but the hub always owns the cross-cutting features: scheduler/planner, goal tracking,
   and an AI expert with access to all my data across every module.
@@ -125,10 +126,30 @@ See `README.md` for setup and day-to-day commands.
   helpers in `sources.ts`, `src/app/api/integrations/oura/*`). Tokens use form-encoded OAuth.
   Readiness is wired into the AI: a `query_readiness` read tool (master + health specialist) and
   the health coach's daily context both see recovery, so the assistant can correlate it with training.
+- **Auto-sync (Phase 5b):** daily **Vercel Cron** (`vercel.json` → `/api/cron/sync`, 08:00 UTC)
+  pulls every active integration without a button press. Shared sync cores in
+  `src/lib/integrations/sync.ts` run from both the manual "Sync now" actions (RLS client) and the
+  cron (service-role admin client, explicit `user_id` per source). Route is gated by `CRON_SECRET`
+  (Vercel sends it as the Bearer) and exempt from the passcode middleware. Idempotent + incremental,
+  so a daily re-run is safe.
 - **Operational lock:** site-wide passcode gate at `/gate` — controlled by the `SITE_PASSCODE`
-  env var, custom Life Hub-styled passcode page, HttpOnly + Secure cookie holds a SHA-256 hash
+  env var, custom Kosmos-styled passcode page, HttpOnly + Secure cookie holds a SHA-256 hash
   (cleartext never stored), sits in front of Supabase auth. Toggle on/off by setting or removing
   the env var in Vercel.
+- **UI redesign + Kosmos rebrand (Milestones 1–2)** *(on `redesign/milestone-2`, PR #2 — merges
+  to `main` pending review)*:
+  - **M1 — design system + shell:** semantic design tokens in `globals.css` (light/dark/amoled
+    themes, 6 accent colors, density) with FOUC-free persistence (cookie mirror +
+    `shared.user_preferences`); app shell with desktop sidebar + mobile bottom tab bar
+    (Quick-add/More sheets); shared `ui/` component layer (`src/components/ui/*`); home dashboard
+    decomposed into reorderable/hideable widgets (dnd-kit); appearance settings page. Bundled
+    security hardening: managed-key + bloodwork-upload allowlists, OAuth token clearing on
+    disconnect, anon-grant revoke, signup disable.
+  - **M2 — data viz + PWA:** Recharts chart kit themed via CSS vars (`src/components/charts/*`);
+    reusable trend builders (`src/lib/analytics/*`); Health dashboard (`/health/dashboard` —
+    sleep, recovery, mood, weight); home calendar + trend chart widgets; full `/calendar` page
+    (month/week/day over scheduled events + goal deadlines); installable PWA (manifest, service
+    worker, offline page); renamed the app from "Life Hub" to **Kosmos** throughout the UI.
 
 ### 🔭 Wanted but not started
 
@@ -164,7 +185,7 @@ See `README.md` for setup and day-to-day commands.
 The decision that shapes the whole integrations roadmap: **health data sources split into two
 camps, and only one is reachable from a web backend.**
 
-1. **Cloud-API services** — expose an OAuth web API we can pull from Life Hub's server, exactly
+1. **Cloud-API services** — expose an OAuth web API we can pull from Kosmos's server, exactly
    like Strava. These are the ones we build server-side connectors for:
    - **Strava** — workouts/activities (✅ connected). Not an everything-aggregator, but it *does*
      aggregate workouts: Garmin / Apple Watch / Wahoo / Peloton etc. push activities into Strava,
@@ -183,7 +204,7 @@ camps, and only one is reachable from a web backend.**
    API — a separate project. The only no-code fallback is manual export/import (e.g. the Apple
    Health XML zip).
 
-**Implication:** there is no single magic source to "pull everything" from server-side. Life Hub
+**Implication:** there is no single magic source to "pull everything" from server-side. Kosmos
 gets **one connector per data domain**, each from the best cloud-API service (workouts → Strava,
 sleep/HR → Oura/Fitbit, weight → Withings, …). The `shared.sources` + universal `events` design
 already makes each new connector mechanical — it's just another source row feeding the same tables.
@@ -199,7 +220,7 @@ Apple/Google/Samsung are a *later* companion-app effort, not a quick OAuth conne
 | 1.5 | Deployment wiring | ✅ |
 | 2 | Manual logging UI + wellness tables | ✅ |
 | 3 | Weightlifting module | ✅ ("good enough for now") |
-| **4** | **Base Life Hub features** (current) | ✅ complete |
+| **4** | **Base hub features** | ✅ complete |
 | · 4a | Scheduler/planner + habits | ✅ |
 | · 4b | Personal goals UI | ✅ |
 | · 4c | Main dashboard redesign | ✅ |
@@ -207,7 +228,7 @@ Apple/Google/Samsung are a *later* companion-app effort, not a quick OAuth conne
 | · 4e | AI assistant (chat → tools → memory → coach → multi-agent) | ✅ |
 | **5** | **Wellness integrations** (current) | 🚧 Strava live |
 | · 5a | Strava: OAuth connect + manual "Sync now" | ✅ verified in prod |
-| · 5b | Strava auto-sync (webhooks or cron) | ⬜ |
+| · 5b | Auto-sync (Strava + Oura) — daily Vercel Cron | ✅ |
 | · 5c | Oura connector (sleep + readiness/HRV) | ✅ |
 | · 5c+ | More cloud-API connectors (Fitbit, Withings, Cronometer) | ⬜ |
 | · 5d | On-device hubs (Apple Health / Google Health Connect / Samsung) — needs a companion app | ⬜ |
@@ -217,29 +238,40 @@ Apple/Google/Samsung are a *later* companion-app effort, not a quick OAuth conne
 
 ## 7. Current focus — pick up here
 
-**Just landed:**
-- **Phase 5c — Oura connector (sleep + recovery)** built + committed (`4593784`, CI green).
-  OAuth connect + manual "Sync now"; sleep → `wellness.sleep_sessions`, readiness → new
-  `wellness.readiness` table; health hub Recovery card. Migration applied to the hosted DB.
-- **Readiness → AI wiring** (this session): `query_readiness` read tool (master + health
-  specialist) + readiness in the health coach's context, so the assistant can correlate recovery
-  with training. Typecheck + lint + build green. **Not yet committed/pushed.** Still needs Oura app
-  creds + manual E2E to see real data.
-- **Strava (5a) is LIVE and verified in prod** — connect → sync confirmed working.
-- Integrations strategy recorded in §5 (cloud-API vs on-device).
+**Just landed (2026-06-09, on branch `redesign/milestone-2` — PR #2 open, not yet merged to `main`):**
+- **UI redesign Milestone 1** (`584cd42`): the soft/airy design-system foundation. Semantic design
+  tokens in `globals.css` (light/dark/amoled themes, 6 accent colors, density) with FOUC-free
+  persistence (cookie + `shared.user_preferences`); new app shell (desktop sidebar + mobile bottom
+  tab bar with Quick-add/More sheets, retires `Nav.tsx`); shared `ui/` component layer; home
+  dashboard decomposed into reorderable/hideable widgets (dnd-kit); appearance settings page. Also
+  bundled earlier security hardening (managed-key + bloodwork-upload allowlists, OAuth token
+  clearing on disconnect, anon-grant revoke, signup disable).
+- **UI redesign Milestone 2** (`1f3d98d`): the visual-intelligence layer + installable app.
+  Recharts chart kit themed via CSS vars (`src/components/charts/*`); reusable analytics/trend
+  builders (`src/lib/analytics/*`); **Health dashboard** at `/health/dashboard` (sleep, Oura
+  recovery, mood, weight — the template for other modules in M3); home calendar + sleep/weight/
+  mood/training-load chart widgets; full `/calendar` page (month/week/day); **PWA** (manifest,
+  service worker, offline page, icons); **rebrand Life Hub → Kosmos**.
+- Earlier this month (already on `main`): Phase 5b auto-sync, Phase 5c Oura connector, and the
+  readiness → AI wiring are all committed (`bc81515` and prior) — see §5 for detail.
 
-**Open follow-ups / to finish Oura Wave:**
-- **Register an Oura app** (https://cloud.ouraring.com/oauth/applications) → set `OURA_CLIENT_ID` /
-  `OURA_CLIENT_SECRET` in Vercel; **Redirect URI** = `https://projectkosmos.com/api/integrations/oura/callback`.
-- **Manual E2E**: connect → "Sync now" → nights land in `sleep_sessions` + `readiness`, Recovery
-  card shows, re-sync skips dupes.
+**Open follow-ups:**
+- **Merge PR #2** (`redesign/milestone-2` → `main`) once reviewed; prod deploys from `main`.
+- **Set `CRON_SECRET` in Vercel** (any 32-byte hex) so the daily auto-sync actually runs. Test:
+  `curl -H "Authorization: Bearer <secret>" https://projectkosmos.com/api/cron/sync` → JSON summary;
+  Vercel → Settings → Cron Jobs can also "Run" it on demand.
+- **Register an Oura app** → set `OURA_CLIENT_ID` / `OURA_CLIENT_SECRET` in Vercel; **Redirect URI**
+  = `https://projectkosmos.com/api/integrations/oura/callback`. Then connect at `/integrations`.
+  Oura E2E (real data through sleep/readiness/AI) still unverified.
 - Still untested in a browser: multi-agent assistant, Phase 4e6 coach cards. Add `SITE_PASSCODE` to
   Vercel Preview env.
 
 **Decision pending — what's next:**
-- (a) **Auto-sync (5b)** for Strava + Oura (webhooks or Vercel cron — no button press), or
-- (b) **Next connector** (Withings → weight, or Fitbit), or
-- (c) Tech debt: timezone-aware pass, deployment hardening (preview DB, DMARC, health monitoring).
+- (a) **Redesign Milestone 3** — roll the dashboard/chart template out to the other modules
+  (lifting, running), or
+- (b) **Next connector** — Withings (weight) or Fitbit (steps), or
+- (c) **Bloodwork module UI + AI doctor** (tables exist; no UI/interpretation yet), or
+- (d) Tech debt: timezone-aware pass, deployment hardening (preview DB, DMARC, health monitoring).
 
 _Update this section at the end of each session so the next one starts here._
 

@@ -61,7 +61,7 @@ export default async function GatePage({
       <div className="w-full max-w-sm space-y-6">
         <header className="space-y-1 text-center">
           <p className="text-xs uppercase tracking-[0.2em] text-zinc-500 dark:text-zinc-400">
-            Life Hub
+            Kosmos
           </p>
           <h1 className="text-2xl font-semibold tracking-tight">
             Enter passcode

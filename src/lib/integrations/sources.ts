@@ -126,15 +126,34 @@ export async function updateSourceConfig(
 }
 
 // Soft-disconnect: keep all imported history, just stop treating the source
-// as active. Tokens are cleared so a stale blob can't be reused.
+// as active. The encrypted access/refresh tokens are wiped from `config` so a
+// disconnect actually severs access — a leftover refresh-token blob is
+// long-lived and could otherwise be resurrected to pull live data after the
+// user believes they've disconnected. We read-modify-write the existing config
+// so sync bookkeeping (last_synced_at, backfill_days, scopes) survives for any
+// later reconnect; only the secrets are stripped.
 export async function setSourceInactive(
   supabase: SupabaseClient,
   sourceId: string,
 ): Promise<void> {
+  const { data } = await supabase
+    .schema("shared")
+    .from("sources")
+    .select("config")
+    .eq("id", sourceId)
+    .maybeSingle();
+
+  // Drop the two secret fields; keep the rest of the bookkeeping. `config` may
+  // be a Strava or Oura blob (or null on a malformed row) — both share the
+  // access_token / refresh_token keys, so one strip covers both.
+  const rest = { ...((data?.config ?? {}) as Record<string, unknown>) };
+  delete rest.access_token;
+  delete rest.refresh_token;
+
   await supabase
     .schema("shared")
     .from("sources")
-    .update({ is_active: false })
+    .update({ is_active: false, config: rest })
     .eq("id", sourceId);
 }
 
@@ -293,4 +312,28 @@ export async function ensureFreshOuraToken(
   };
   await updateSourceConfig(supabase, source.id, nextConfig);
   return { accessToken: refreshed.access_token, config: nextConfig };
+}
+
+// ---- Cron ------------------------------------------------------------------
+
+export type ActiveIntegrationSource = {
+  id: string;
+  user_id: string;
+  provider: string;
+  config: StravaConfig | OuraConfig;
+};
+
+// Every active integration source across all users, with explicit user_id.
+// Used by the daily cron (admin client, no RLS) — unlike getStravaSource /
+// getOuraSource which rely on RLS to scope to the signed-in user.
+export async function listActiveIntegrationSources(
+  supabase: SupabaseClient,
+): Promise<ActiveIntegrationSource[]> {
+  const { data } = await supabase
+    .schema("shared")
+    .from("sources")
+    .select("id, user_id, provider, config")
+    .eq("kind", "integration")
+    .eq("is_active", true);
+  return (data ?? []) as ActiveIntegrationSource[];
 }

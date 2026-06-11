@@ -233,6 +233,12 @@ export default async function HealthHubPage() {
           Snapshot across sleep, mood, body, meals, medications, and
           bloodwork. Each card links into the full log entry.
         </p>
+        <Link
+          href="/health/dashboard"
+          className="inline-block text-sm font-medium text-accent hover:opacity-80"
+        >
+          View trends dashboard →
+        </Link>
       </header>
 
       <CoachSaysCard domain="health" />

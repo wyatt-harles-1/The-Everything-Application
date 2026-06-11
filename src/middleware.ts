@@ -25,7 +25,18 @@ export async function middleware(request: NextRequest) {
   // /gate itself is excluded so the form is reachable. Unset env var (e.g.
   // local dev) skips the gate entirely.
   const passcode = process.env.SITE_PASSCODE;
-  if (passcode && request.nextUrl.pathname !== "/gate") {
+  const path = request.nextUrl.pathname;
+  const gateExempt =
+    path === "/gate" ||
+    // Cron jobs (Vercel) carry no gate cookie; they auth via CRON_SECRET in
+    // the route itself, so don't bounce them to /gate.
+    path.startsWith("/api/cron") ||
+    // PWA surfaces must load on the locked site: the manifest + service worker
+    // + offline fallback, or the app can't be installed / go offline.
+    path === "/manifest.webmanifest" ||
+    path === "/sw.js" ||
+    path === "/offline";
+  if (passcode && !gateExempt) {
     const cookieHash = request.cookies.get(GATE_COOKIE)?.value;
     const expected = await sha256Hex(passcode);
     if (cookieHash !== expected) {

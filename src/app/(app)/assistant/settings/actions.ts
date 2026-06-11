@@ -10,6 +10,7 @@ import { revalidatePath } from "next/cache";
 
 import { aiSettingsSchema } from "@/lib/validation/aiSettings";
 import { encryptApiKey } from "@/lib/ai/encryption";
+import { isManagedKeyAllowed } from "@/lib/ai/managedKey";
 import {
   getUserContext,
   captureValues,
@@ -45,6 +46,18 @@ export async function saveAISettings(
     return { ok: false, banner: bannerFor(errors), errors, values };
   }
   const s = parsed.data;
+
+  // Managed (app-owned) keys bill the operator, so only allowlisted accounts
+  // may opt in. Reject up front with a clear message; provider.ts enforces the
+  // same check again at the point of use as defense in depth.
+  if (s.use_managed_key && !isManagedKeyAllowed(ctx.email)) {
+    return {
+      ok: false,
+      banner:
+        "The app's managed API key isn't available for your account. Add your own provider API key below instead.",
+      values,
+    };
+  }
 
   // Find the existing row so we know whether to preserve the stored key.
   const { data: existing } = await ctx.supabase
