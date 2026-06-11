@@ -1,9 +1,10 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
 import { readPreferences } from "@/lib/preferences/server";
 import { htmlThemeAttrs } from "@/lib/preferences/cookie";
+import { RegisterSW } from "@/components/pwa/RegisterSW";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -16,8 +17,18 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Life Hub",
-  description: "Personal life-management application.",
+  title: "Kosmos",
+  description: "Your whole life, in one place.",
+  applicationName: "Kosmos",
+  appleWebApp: { capable: true, title: "Kosmos", statusBarStyle: "default" },
+};
+
+export const viewport: Viewport = {
+  // Browser chrome color follows the OS scheme (the in-app theme is separate).
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f6f6f4" },
+    { media: "(prefers-color-scheme: dark)", color: "#0b0b0c" },
+  ],
 };
 
 // Pre-paint theme resolver. The <html> attributes are already set server-side
@@ -48,6 +59,7 @@ export default async function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+        <RegisterSW />
         {children}
       </body>
     </html>

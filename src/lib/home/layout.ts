@@ -5,9 +5,14 @@
 
 export const HOME_WIDGET_IDS = [
   "today",
+  "calendar",
   "training",
   "habits",
   "goals",
+  "sleepchart",
+  "trainingload",
+  "weighttrend",
+  "moodtrend",
   "quicklog",
   "sections",
   "recent",
@@ -19,9 +24,14 @@ export const DEFAULT_HOME_ORDER: HomeWidgetId[] = [...HOME_WIDGET_IDS];
 
 export const WIDGET_LABELS: Record<HomeWidgetId, string> = {
   today: "Today",
+  calendar: "Calendar",
   training: "Training block",
   habits: "Habits this week",
   goals: "Top goals",
+  sleepchart: "Sleep trend",
+  trainingload: "Training load",
+  weighttrend: "Weight trend",
+  moodtrend: "Mood trend",
   quicklog: "Quick log",
   sections: "Sections",
   recent: "Recent activity",

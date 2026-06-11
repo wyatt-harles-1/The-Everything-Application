@@ -1,4 +1,4 @@
-# Life Hub — Claude instructions
+# Kosmos — Claude instructions
 
 **Start here:** read [`PROJECT.md`](./PROJECT.md) for the project's purpose, current status, feature
 checklists, and the active plan. The **Current focus** section at the bottom of PROJECT.md is the
@@ -6,7 +6,8 @@ handoff point between sessions — that's where to "pick up where we left off."
 
 ## What this is
 
-Life Hub / "The Everything Application" — a private personal life-management app (training, health,
+Kosmos (formerly "Life Hub"; repo name "The Everything Application") — a private personal
+life-management app (training, health,
 habits, goals, schedule, later finance) on a unified Postgres timeline, with an AI assistant that
 can read and act across all of it.
 

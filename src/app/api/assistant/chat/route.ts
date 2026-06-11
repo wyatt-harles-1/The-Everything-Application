@@ -34,7 +34,7 @@ import {
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-const BASE_SYSTEM_PROMPT = `You are the user's personal assistant inside Life Hub, a single-user personal management app that aggregates wellness, lifting, running, scheduling, habits, and goals data.
+const BASE_SYSTEM_PROMPT = `You are the user's personal assistant inside Kosmos, a single-user personal management app that aggregates wellness, lifting, running, scheduling, habits, and goals data.
 
 READ-ONLY TOOLS (auto-execute; results stream back to you):
 - get_today_summary: one-shot daily briefing. Call first for "how's today/this week" questions.

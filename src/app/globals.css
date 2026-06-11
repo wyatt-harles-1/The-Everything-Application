@@ -38,6 +38,12 @@
   /* accent default; overridden by [data-accent] below */
   --accent: #4f46e5; --accent-fg: #ffffff; --accent-soft: #eef2ff;
 
+  /* Categorical chart palette (multi-series). Single-series charts use
+     --accent so they pick up the user's accent; multi-series use these. Tuned
+     for white surfaces; dark/amoled lift the lightness below. */
+  --chart-1: #4f46e5; --chart-2: #059669; --chart-3: #d97706;
+  --chart-4: #e11d48; --chart-5: #0284c7; --chart-6: #7c3aed;
+
   --radius-card: 1rem;      /* 16px */
   --radius-lg: 1.25rem;     /* 20px — sheets/modals */
   --radius-pill: 9999px;
@@ -65,6 +71,10 @@
   --danger-soft: #2a0e0e;
   --accent-soft: #1e1b4b;
 
+  /* Brighter chart hues so series read on dark surfaces. */
+  --chart-1: #818cf8; --chart-2: #34d399; --chart-3: #fbbf24;
+  --chart-4: #fb7185; --chart-5: #38bdf8; --chart-6: #a78bfa;
+
   --shadow-soft: 0 1px 2px rgb(0 0 0 / 0.3), 0 6px 20px rgb(0 0 0 / 0.4);
   --shadow-pop: 0 12px 40px rgb(0 0 0 / 0.6);
 }
@@ -83,6 +93,10 @@
   --warn-soft: #221703;
   --danger-soft: #220a0a;
   --accent-soft: #14122e;
+
+  /* Same lifted chart hues as dark — they read well on true black too. */
+  --chart-1: #818cf8; --chart-2: #34d399; --chart-3: #fbbf24;
+  --chart-4: #fb7185; --chart-5: #38bdf8; --chart-6: #a78bfa;
 
   --shadow-soft: none;       /* AMOLED reads off borders, not shadows */
   --shadow-pop: 0 12px 40px rgb(0 0 0 / 0.8);
@@ -131,6 +145,13 @@
   --color-accent: var(--accent);
   --color-accent-fg: var(--accent-fg);
   --color-accent-soft: var(--accent-soft);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-chart-6: var(--chart-6);
 
   --color-success: var(--success);
   --color-success-fg: var(--success-fg);
