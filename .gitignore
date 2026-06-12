@@ -53,5 +53,15 @@ supabase/.env
 # Shared team settings would live in .claude/settings.json which IS committable.
 .claude/settings.local.json
 
+# Agent skills installed by `npx skills` (local tooling, not app code).
+# .claude/skills is a junction into .agents/skills.
+.agents/
+.claude/skills/
+skills-lock.json
+
+# Personal data exports (Strong/Cronometer CSVs etc.) — never commit real
+# life data; drop files in local-data/ to work with them locally.
+local-data/
+
 .vercel
 .env*.local
