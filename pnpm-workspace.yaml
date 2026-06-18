@@ -4,6 +4,10 @@
 #   - esbuild       - used by vercel CLI's bundler; fetches a Go binary
 #   - sharp         - image optimization used by next/image; fetches libvips
 #   - unrs-resolver - Rust-based module resolver used by eslint-config-next
+packages:
+  - "apps/*"
+  - "packages/*"
+
 allowBuilds:
   esbuild: true
   sharp: true

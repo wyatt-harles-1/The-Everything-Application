@@ -7,7 +7,7 @@
 > checklists and the **Current focus** section as work lands, so this file is always the handoff
 > point between sessions.
 
-**Last updated:** 2026-06-11
+**Last updated:** 2026-06-17
 
 ---
 
@@ -15,9 +15,10 @@
 
 Kosmos (formerly "Life Hub"; repo name "The Everything Application") is a personal
 life-management system that pulls every meaningful thing in my life — training, health, habits,
-goals, schedule, and eventually finances and more — into one private, queryable place. Data arrives three ways: things I log by hand in
-Kosmos, cloud APIs that sync automatically (Strava today), and imports from the best-of-breed
-apps I actually track my life with (Strong for lifting, Cronometer for food, 8 Sleep for sleep).
+goals, schedule, and eventually finances and more — into one private, queryable place. Data
+arrives three ways: things I log by hand in Kosmos-native apps (lifting is the first I'm building
+out fully), cloud APIs that sync automatically (Strava today), and imports from best-of-breed apps
+where I don't build my own (Cronometer for food, 8 Sleep for sleep).
 
 Everything lands on a single chronological timeline backed by Postgres, so an AI assistant can
 reason across all of it ("how did my sleep affect my lifts last month?") instead of each feature
@@ -28,11 +29,14 @@ living in its own silo.
 - **One database for your whole life.** Every tracker — Kosmos-native or third-party — feeds the
   same unified timeline. Kosmos is the aggregation and intelligence layer on top: the place where
   sleep, training, food, mood, and (later) money can finally be queried together.
-- **Hybrid tracking, imports first-class.** The apps I already use are better capture tools than
-  anything I'd rebuild, so they stay primary where they're strong: **Strong** for lifting,
-  **Cronometer** for food, **8 Sleep** for sleep, **Strava** for cardio. Kosmos's own logging UIs
-  are primary for everything those apps don't cover (mood, meds, habits, goals, bloodwork) and a
-  fallback everywhere else. Getting external data in is a core feature, not an afterthought.
+- **Hybrid tracking — native where I can build it best, imports elsewhere.** Some life aspects
+  are better served by a Kosmos-native app I control end-to-end; others by the best-of-breed app
+  I already use. **Lifting goes native** — I tried the alternatives (incl. Hevy) and none is what
+  I want, so Kosmos's own lifting app becomes primary (Strong is imported once for history, then
+  retired; decided 2026-06-17). The rest stay external imports/connectors: **Cronometer** for
+  food, **8 Sleep** for sleep, **Strava** for cardio. Kosmos-native logging is also primary for
+  everything none of those cover (mood, meds, habits, goals, bloodwork). Getting external data in
+  is a core feature, not an afterthought.
 - **The Office-suite model.** Kosmos is the suite; each life aspect (training, food, sleep,
   finance, …) eventually becomes its own polished app — like Word / Excel / PowerPoint, but for
   aspects of one's life — all integrating smoothly into the same ecosystem: one timeline, one
@@ -161,11 +165,19 @@ See `README.md` for setup and day-to-day commands.
 
 ### 🔭 Wanted but not started
 
-- **Personal-stack integrations (Phase 5 — remaining):** **Strong CSV import** (lifting →
-  existing workout/lifting tables), **Cronometer CSV import** (food → meals/nutrition), and an
-  **8 Sleep connector** (unofficial API → `wellness.sleep_sessions`). Manual file upload is the
-  v1 for the CSV pair; see the Integrations strategy below. On-device hubs (Apple Health /
-  Google Health Connect / Samsung) still need a **companion app** — a later, separate effort.
+- **Monorepo / ecosystem foundation (Phase M):** restructure the single app into a pnpm-workspace
+  monorepo (`apps/kosmos` + shared `@kosmos/*` packages) so the Office-suite vision (standalone
+  apps per life aspect) becomes a mechanical extraction. Decided 2026-06-17; see §7.
+- **Lifting app build-out (Phase L) — native-first, offline-capable:** turn the existing lifting
+  module into a true Strong replacement. Headline is **offline workout logging** (my gym signal is
+  spotty), plus crash/refresh session persistence, a **one-time Strong CSV importer** (history →
+  existing workout/lifting tables, then retire Strong), and gym-mode polish (custom bar weights,
+  supersets, "vs last time," deload toggle).
+- **Personal-stack integrations (Phase 5 — remaining):** **Cronometer CSV import** (food →
+  meals/nutrition) and an **8 Sleep connector** (unofficial API → `wellness.sleep_sessions`).
+  Manual file upload is the v1 for Cronometer; see the Integrations strategy below. On-device hubs
+  (Apple Health / Google Health Connect / Samsung) still need a **companion app** — a later,
+  separate effort.
 - **Bloodwork module + AI doctor:** tables exist; the module UI and AI interpretation don't.
 - **Finance domain + AI financial advisor:** Plaid sync, `finance` schema, advisor agent.
 - **Knowledge domain:** reserved, undefined.
@@ -191,8 +203,9 @@ See `README.md` for setup and day-to-day commands.
 
 ### 🔌 Integrations strategy (how Phase 5+ sources connect)
 
-The decision that shapes the whole integrations roadmap: **data sources split into three camps,
-and only the first is cleanly reachable from a web backend.**
+The decision that shapes the whole integrations roadmap: **data sources fall into four camps** —
+cloud-API services and native Kosmos apps are the clean wins; file-export apps need an import
+pipeline; on-device platforms need a companion app.
 
 1. **Cloud-API services** — expose an OAuth web API we can pull from Kosmos's server, exactly
    like Strava. These get server-side connectors:
@@ -209,13 +222,18 @@ and only the first is cleanly reachable from a web backend.**
 2. **File-export apps — no usable API, but an official CSV export.** The path here is an
    **import pipeline**: export from the app, upload at `/integrations`, parse into the same
    domain tables + timeline (tagged to a `provider` source row, idempotent like the connectors):
-   - **Strong** (lifting) — no API at all; clean CSV export (date, workout, exercise, set order,
-     weight, reps, …).
    - **Cronometer** (food) — public API is partner-gated; official CSV exports (servings,
      biometrics, exercises). Later option: automate pulls via its unofficial export endpoint
      (the GWT-RPC calls the web app itself uses — cf. the `gocronometer` library).
+   - **Strong** (lifting) — no API at all; clean CSV export. But lifting is going **native**
+     (camp 4 below), so Strong is a **one-time history import**, not an ongoing source.
 
-3. **On-device platforms — NO web API exists** (the big gotcha):
+3. **Native Kosmos apps — no third party at all.** Some aspects are better as an app I build and
+   control. **Lifting** is the first: the existing module becomes a full tracker (offline gym
+   logging, the works), eventually its own ecosystem app. No external dependency, no API risk,
+   and the data is native to the timeline from the start.
+
+4. **On-device platforms — NO web API exists** (the big gotcha):
    - **Apple Health (HealthKit)** — iOS, data lives on the phone; no server endpoint.
    - **Google** — Fit's REST API was deprecated; its successor **Health Connect** is on-device Android only.
    - **Samsung Health** — on-device Android SDK, partner-only.
@@ -229,7 +247,7 @@ and only the first is cleanly reachable from a web backend.**
 | Life aspect | App | Path into Kosmos |
 | --- | --- | --- |
 | Cardio / activities | Strava | ✅ cloud-API connector, live + daily cron |
-| Lifting | Strong | CSV import (no API exists) |
+| Lifting | **Kosmos-native** | Building our own app; Strong imported once for history, then retired |
 | Food | Cronometer | CSV import first; unofficial export endpoint later |
 | Sleep | 8 Sleep | Connector on the unofficial API |
 | Finances | Several apps | Deferred to the finance phase — much larger undertaking |
@@ -256,14 +274,16 @@ Apple/Google/Samsung are a *later* companion-app effort, not a quick OAuth conne
 | · 4c | Main dashboard redesign | ✅ |
 | · 4d | Module priority pass (running, health) | ✅ |
 | · 4e | AI assistant (chat → tools → memory → coach → multi-agent) | ✅ |
-| **5** | **Personal-stack integrations** (current) | 🚧 Strava live |
+| **5** | **Personal-stack integrations** | 🚧 Strava live |
 | · 5a | Strava: OAuth connect + manual "Sync now" | ✅ verified in prod |
 | · 5b | Auto-sync — daily Vercel Cron | ✅ verified in prod |
 | · 5c | Oura connector (sleep + readiness/HRV) | ✅ built (dormant — no ring) |
-| · 5d | CSV import pipeline: shared upload UI at `/integrations`; Strong importer (lifting), Cronometer importer (food) | ⬜ |
+| · 5d | Cronometer CSV import (food → meals/nutrition); shared upload UI at `/integrations` | ⬜ |
 | · 5e | 8 Sleep connector (unofficial API → sleep_sessions) | ⬜ |
 | · 5f | On-device hubs (Apple Health / Google Health Connect / Samsung) — needs a companion app | ⬜ |
-| 6+ | Bloodwork + AI doctor, knowledge, standalone-app extraction; Finance + AI advisor (deferred — large undertaking) | ⬜ |
+| **M** | **Monorepo / ecosystem foundation** (current) — `apps/kosmos` + shared `@kosmos/*` packages | 🚧 in progress |
+| **L** | **Lifting app build-out** (native-first) — offline gym logging, session persistence, one-time Strong import, gym-mode polish | ⬜ next |
+| 6+ | Bloodwork + AI doctor, knowledge, standalone-app extraction (incl. `apps/lifting`); Finance + AI advisor (deferred — large undertaking) | ⬜ |
 
 ---
 
@@ -297,19 +317,32 @@ Apple/Google/Samsung are a *later* companion-app effort, not a quick OAuth conne
   Strong (lifting), Cronometer (food), 8 Sleep (sleep). **Oura decision: no ring — connector
   stays built but dormant**; its registration follow-up is dropped.
 
+**Direction set (2026-06-17) — build a native lifting app, monorepo first:**
+- Evaluated Hevy (only lifting app with a real API + webhooks) — **not what I want**. So **lifting
+  goes native**: build out Kosmos's own lifting module into a true Strong replacement. Strong gets
+  imported once for history, then retired.
+- Gym signal is **spotty → offline workout logging is required** for the lifting v1.
+- Chosen path to the Office-suite end state: **restructure into a monorepo now** (`apps/kosmos` +
+  shared `@kosmos/*` packages), **full restructure first**, then the lifting build-out. (I flagged
+  that a big-bang restructure is the riskiest first step and competes with "lifting first"; I chose
+  it deliberately. Execution is staged to de-risk — see the plan.) `apps/lifting` is **not** split
+  out yet; lifting is built inside `apps/kosmos` until extraction is warranted (invariant #6 keeps
+  that mechanical).
+
 **Open follow-ups:**
 - Still untested in a browser: multi-agent assistant, Phase 4e6 coach cards. Add `SITE_PASSCODE` to
   Vercel Preview env.
+- **Vercel Root Directory** must be set to `apps/kosmos` once the move lands, or prod deploys break
+  (the deploy-time equivalent of the folder move).
 
-**Next up — personal-stack integrations (order adjustable):**
-1. **Strong CSV import** (Phase 5d, first) — simplest format, and it maps onto the existing rich
-   lifting/workout tables; build the shared upload UI at `/integrations` with it.
-2. **Cronometer CSV import** (5d) — reuses the same upload pipeline.
-3. **8 Sleep connector** (5e) — unofficial API; shaped like the Strava/Oura connectors.
-
-After that, the bench: redesign Milestone 3 (roll the dashboard/chart template to lifting and
-running), bloodwork module UI + AI doctor, or the tech-debt pass (timezones, preview DB, DMARC,
-health monitoring).
+**Next up — in order:**
+1. **Phase M — monorepo restructure** (current, on branch `refactor/monorepo`):
+   (a) move the app into `apps/kosmos` with zero behavior change, verify + deploy alone, then
+   (b) extract `@kosmos/{types,validation,db,ui}` one at a time, each green + committed.
+2. **Phase L — lifting build-out (offline-first):** local-first IndexedDB write queue + replay,
+   gym-mode offline shell, crash/refresh persistence, one-time Strong CSV importer, parity polish.
+3. **Then the bench:** Cronometer CSV import (5d), 8 Sleep connector (5e), bloodwork module + AI
+   doctor, or the tech-debt pass (timezones, preview DB, DMARC, health monitoring).
 
 _Update this section at the end of each session so the next one starts here._
 
