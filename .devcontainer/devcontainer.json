@@ -1,0 +1,52 @@
+{
+  // GitHub Codespaces / Dev Containers config for Kosmos.
+  // Boots a Linux dev box (Node 24, pnpm) where `pnpm dev` and `pnpm build`
+  // just work — no local setup, no OneDrive symlink issues. See README.md here.
+  "name": "Kosmos (Next.js + pnpm monorepo)",
+
+  // Node 24 matches CI and the Vercel runtime. Debian bookworm image ships
+  // corepack, git, and the common build tools.
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:1-24-bookworm",
+
+  // Enable corepack (activates the pnpm version pinned in package.json's
+  // `packageManager` field) and install the workspace exactly per the lockfile.
+  "postCreateCommand": "sudo corepack enable && pnpm install --frozen-lockfile",
+
+  // Next dev server runs on 3000; auto-open a preview when it comes up.
+  "forwardPorts": [3000],
+  "portsAttributes": {
+    "3000": { "label": "Kosmos dev server", "onAutoForward": "openPreview" }
+  },
+
+  // Recommended secrets — Codespaces prompts for these on creation and injects
+  // them as environment variables. Same values as apps/kosmos/.env.example.
+  // (NEXT_PUBLIC_* are safe to expose; the others are server-only.)
+  "secrets": {
+    "NEXT_PUBLIC_SUPABASE_URL": {
+      "description": "Supabase Project URL (Supabase dashboard → Settings → API)."
+    },
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY": {
+      "description": "Supabase 'anon public' key (Settings → API)."
+    },
+    "SUPABASE_SERVICE_ROLE_KEY": {
+      "description": "Supabase 'service_role' key — server-only, bypasses RLS."
+    },
+    "AI_SETTINGS_MASTER_KEY": {
+      "description": "64-hex-char (32-byte) key for encrypting stored secrets. Optional for basic browsing; required for AI keys / integrations."
+    }
+  },
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "bradlc.vscode-tailwindcss",
+        "esbenp.prettier-vscode"
+      ],
+      "settings": {
+        // Use the workspace TypeScript so editor types match the build.
+        "typescript.tsdk": "apps/kosmos/node_modules/typescript/lib"
+      }
+    }
+  }
+}
