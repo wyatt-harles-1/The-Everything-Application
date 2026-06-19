@@ -7,7 +7,7 @@
 > checklists and the **Current focus** section as work lands, so this file is always the handoff
 > point between sessions.
 
-**Last updated:** 2026-06-17
+**Last updated:** 2026-06-18
 
 ---
 
@@ -281,7 +281,8 @@ Apple/Google/Samsung are a *later* companion-app effort, not a quick OAuth conne
 | · 5d | Cronometer CSV import (food → meals/nutrition); shared upload UI at `/integrations` | ⬜ |
 | · 5e | 8 Sleep connector (unofficial API → sleep_sessions) | ⬜ |
 | · 5f | On-device hubs (Apple Health / Google Health Connect / Samsung) — needs a companion app | ⬜ |
-| **M** | **Monorepo / ecosystem foundation** (current) — `apps/kosmos` + shared `@kosmos/*` packages | 🚧 in progress |
+| **M** | **Monorepo / ecosystem foundation** — app moved to `apps/kosmos` (workspace + `@kosmos/app`), live in prod | ✅ move done |
+| · M2 | Extract shared `@kosmos/*` packages (db, validation, ui) | ⬜ deferred until a 2nd app needs them |
 | **L** | **Lifting app build-out** (native-first) — offline gym logging, session persistence, one-time Strong import, gym-mode polish | ⬜ next |
 | 6+ | Bloodwork + AI doctor, knowledge, standalone-app extraction (incl. `apps/lifting`); Finance + AI advisor (deferred — large undertaking) | ⬜ |
 
@@ -329,19 +330,33 @@ Apple/Google/Samsung are a *later* companion-app effort, not a quick OAuth conne
   out yet; lifting is built inside `apps/kosmos` until extraction is warranted (invariant #6 keeps
   that mechanical).
 
+**Monorepo move LANDED (2026-06-18, PR #3 → `main`, deployed to prod):** the app now lives in
+`apps/kosmos` (pnpm workspace; root is the workspace manager, `apps/kosmos` is `@kosmos/app`).
+CI green; Vercel **Root Directory set to `apps/kosmos`**; prod deployment `447de04` succeeded and
+the live site serves. Phase A of the restructure is done. **Shared-package extraction (M2) is
+deferred** — it only pays off once a second app consumes the packages, and lifting stays inside
+`apps/kosmos` for now, so there's no consumer yet.
+
+**Known issue — OneDrive breaks local builds:** with the repo under OneDrive, `tsc`/`next build`
+fail locally (phantom recharts type errors) because OneDrive mangles the workspace's
+cross-directory pnpm symlinks (`apps/kosmos/node_modules → ../../node_modules/.pnpm`). The exact
+same commit builds clean outside OneDrive and on CI/Vercel. **Fix: move the repo out of OneDrive**
+(e.g. `C:\Users\wyatt\dev\the-everything-application`) — do it between sessions; moving mid-session
+breaks the working dir. After the move, mention it so the project memory can be re-pointed to the
+new path.
+
 **Open follow-ups:**
 - Still untested in a browser: multi-agent assistant, Phase 4e6 coach cards. Add `SITE_PASSCODE` to
   Vercel Preview env.
-- **Vercel Root Directory** must be set to `apps/kosmos` once the move lands, or prod deploys break
-  (the deploy-time equivalent of the folder move).
 
 **Next up — in order:**
-1. **Phase M — monorepo restructure** (current, on branch `refactor/monorepo`):
-   (a) move the app into `apps/kosmos` with zero behavior change, verify + deploy alone, then
-   (b) extract `@kosmos/{types,validation,db,ui}` one at a time, each green + committed.
+1. **Move the repo out of OneDrive** (Wyatt, between sessions) → local `pnpm dev`/`build` work again.
 2. **Phase L — lifting build-out (offline-first):** local-first IndexedDB write queue + replay,
    gym-mode offline shell, crash/refresh persistence, one-time Strong CSV importer, parity polish.
-3. **Then the bench:** Cronometer CSV import (5d), 8 Sleep connector (5e), bloodwork module + AI
+   This is the priority and the actual user value.
+3. **Deferred — M2 shared-package extraction** (`@kosmos/{db,validation,ui}`): only when a second
+   app (e.g. `apps/lifting`) needs them. Not now.
+4. **Then the bench:** Cronometer CSV import (5d), 8 Sleep connector (5e), bloodwork module + AI
    doctor, or the tech-debt pass (timezones, preview DB, DMARC, health monitoring).
 
 _Update this section at the end of each session so the next one starts here._
